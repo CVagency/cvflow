@@ -81,7 +81,7 @@ export function StoreProvider({ children }) {
       (scriptsRes.data || []).forEach((s) => { (sc[s.model_id] = sc[s.model_id] || []).push([s.command, s.title, s.body]); });
       setScripts(sc);
       setConvs((fansRes.data || []).map((f) => ({ id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: "", unread: 0, tag: f.tag, spent: Number(f.spent), src: f.source, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" })));
-      setSalesLog((salesRes.data || []).map((s) => ({ user: s.member_id, price: Number(s.amount) })));
+      setSalesLog((salesRes.data || []).map((s) => ({ user: s.member_id, model: s.model_id, price: Number(s.amount), date: s.created_at })));
       // reflect sales into team ca
       setTeam((prev) => prev.map((u) => { const ca = (salesRes.data || []).filter((s) => s.member_id === u.id).reduce((a, s) => a + Number(s.amount), 0); return { ...u, ca, sales: (salesRes.data || []).filter((s) => s.member_id === u.id).length }; }));
     } else {
@@ -169,6 +169,25 @@ export function StoreProvider({ children }) {
     await supabase.from("cvflow_profiles").update({ pct: parseInt(pct) || 0 }).eq("id", userId);
   }, []);
 
+  const deleteModel = useCallback(async (modelId) => {
+    await supabase.from("cvflow_models").delete().eq("id", modelId);
+    if (activeModel === modelId) setActiveModel(null);
+    refresh();
+  }, [activeModel, refresh]);
+
+  const setRole = useCallback(async (userId, role) => {
+    setTeam((prev) => prev.map((u) => (u.id === userId ? { ...u, role } : u)));
+    await supabase.from("cvflow_profiles").update({ role }).eq("id", userId);
+  }, []);
+
+  const removeMember = useCallback(async (userId) => {
+    const { data: { session: s } } = await supabase.auth.getSession();
+    const res = await fetch("/api/member", { method: "DELETE", headers: { "content-type": "application/json", authorization: `Bearer ${s?.access_token}` }, body: JSON.stringify({ userId }) });
+    const out = await res.json();
+    if (out.ok) refresh();
+    return out.error || null;
+  }, [refresh]);
+
   const addMember = useCallback(async ({ email, password, name, role, pct }) => {
     const { data: { session: s } } = await supabase.auth.getSession();
     const res = await fetch("/api/invite", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${s?.access_token}` }, body: JSON.stringify({ email, password, name, role, pct }) });
@@ -193,7 +212,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, activeModel, setActiveModel,
-    loadChat, sendMessage, sendVaultItem, markPaid, setPct, addMember, addMedia, addModel, addFolder, addScript, addFan, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, sendVaultItem, markPaid, setPct, addMember, removeMember, setRole, deleteModel, addMedia, addModel, addFolder, addScript, addFan, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
