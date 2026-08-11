@@ -35,6 +35,17 @@ export default function Conversations() {
 
   useEffect(() => { if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight; }, [msgs, activeConv]);
 
+  // Remontée des messages entrants : rafraîchit la conversation ouverte + la liste des fans
+  useEffect(() => {
+    if (!activeConv) return;
+    const t = setInterval(() => s.loadChat(activeConv), 4000);
+    return () => clearInterval(t);
+  }, [activeConv]);
+  useEffect(() => {
+    const t = setInterval(() => { if (s.refresh) s.refresh(); }, 20000);
+    return () => clearInterval(t);
+  }, []);
+
   function openConv(id) { setActiveConv(id); setVaultOpen(false); s.markRead(id); if (!chats[id]) s.loadChat(id); }
   function send() { if (!draft.trim() || !activeConv) return; s.sendMessage(activeConv, draft.trim()); setDraft(""); setShowScripts(false); }
   function onDraft(v) { setDraft(v); setShowScripts(v.startsWith("/")); }

@@ -1,9 +1,17 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import QRCode from "qrcode";
 import { useStore } from "@/lib/store";
 
-function QR() {
+const WORKER = process.env.NEXT_PUBLIC_TG_WORKER_URL;
+const WORKER_KEY = process.env.NEXT_PUBLIC_TG_WORKER_KEY;
+function workerFetch(path, opts = {}) {
+  return fetch(WORKER + path, { ...opts, headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "", ...(opts.headers || {}) } });
+}
+
+// QR décoratif (repli quand le worker n'est pas encore branché)
+function PlaceholderQR() {
   let cells = [];
   for (let y = 0; y < 21; y++) for (let x = 0; x < 21; x++) {
     const corner = (x < 7 && y < 7) || (x > 13 && y < 7) || (x < 7 && y > 13);
@@ -22,20 +30,46 @@ export default function Models() {
   const [newId, setNewId] = useState(null);
   const [busy, setBusy] = useState(false);
   const [confirmDel, setConfirmDel] = useState(null);
+  const [qrImg, setQrImg] = useState(null);
+  const [error, setError] = useState("");
+  const pollRef = useRef(null);
+
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
 
   async function generate() {
-    setBusy(true);
+    setBusy(true); setError(""); setQrImg(null);
     const id = await addModel(name || "Nouveau modèle");
-    setBusy(false);
-    setNewId(id);
-    setStep("qr");
+    setBusy(false); setNewId(id); setStep("qr");
+    if (WORKER && id) startWorkerConnect(id);
   }
-  async function markConnected() {
+
+  async function startWorkerConnect(id) {
+    try {
+      await workerFetch("/connect", { method: "POST", body: JSON.stringify({ modelId: id }) });
+    } catch (e) { setError("Worker injoignable. Vérifie qu'il tourne et que l'URL est correcte."); return; }
+    let lastQr = "";
+    pollRef.current = setInterval(async () => {
+      try {
+        const r = await workerFetch("/status/" + id);
+        const s = await r.json();
+        if (s.status === "qr" && s.qrUrl && s.qrUrl !== lastQr) {
+          lastQr = s.qrUrl;
+          setQrImg(await QRCode.toDataURL(s.qrUrl, { margin: 1, width: 220 }));
+        }
+        if (s.status === "connected") { clearInterval(pollRef.current); await setModelConnected(id, true); setStep("done"); setTimeout(closeConnect, 1600); }
+        if (s.status === "error") { clearInterval(pollRef.current); setError(s.error || "Échec de la connexion Telegram."); }
+      } catch (e) { /* transitoire */ }
+    }, 2000);
+  }
+
+  async function markConnectedManual() {
     if (newId) await setModelConnected(newId, true);
     closeConnect();
   }
-  function closeConnect() { setConnect(false); setStep("form"); setName(""); setNewId(null); }
-
+  function closeConnect() {
+    if (pollRef.current) clearInterval(pollRef.current);
+    setConnect(false); setStep("form"); setName(""); setNewId(null); setQrImg(null); setError("");
+  }
   function openVault(id) { setActiveModel(id); router.push("/vault"); }
 
   return (
@@ -83,14 +117,28 @@ export default function Models() {
               <button onClick={generate} disabled={busy} className="btn w-full py-2.5 font-bold disabled:opacity-50">{busy ? "…" : "Créer le modèle & afficher le QR"}</button>
             </>}
             {step === "qr" && <div className="text-center py-2">
-              <div className="flex justify-center"><QR /></div>
-              <div className="text-[12.5px] text-muted mt-3">Sur le téléphone du modèle : <b className="text-txt">Telegram → Réglages → Appareils → Lier un appareil</b>, puis scanne ce QR.</div>
-              <div className="text-[11.5px] text-muted2 mt-2 leading-relaxed">Le modèle « {name || "Nouveau modèle"} » est déjà créé dans ton CRM. Une fois le compte réellement lié sur l'appareil, marque-le comme connecté ci-dessous.</div>
-              <div className="flex gap-2.5 mt-4">
-                <button onClick={closeConnect} className="btn-ghost flex-1 py-2.5 font-semibold">Plus tard</button>
-                <button onClick={markConnected} className="btn flex-1 py-2.5 font-bold">✓ Compte lié</button>
+              <div className="flex justify-center min-h-[176px] items-center">
+                {WORKER ? (
+                  error ? <div className="text-danger text-[13px] px-4">{error}</div>
+                  : qrImg ? <img src={qrImg} width={220} height={220} alt="QR Telegram" style={{ borderRadius: 10, background: "#fff", padding: 8 }} />
+                  : <div className="text-muted text-[13px]">Génération du QR en cours…</div>
+                ) : <PlaceholderQR />}
               </div>
+              <div className="text-[12.5px] text-muted mt-3">Sur le téléphone du modèle : <b className="text-txt">Telegram → Réglages → Appareils → Lier un appareil</b>, puis scanne ce QR.</div>
+              {WORKER ? (
+                <div className="text-[11.5px] text-muted2 mt-2">Le QR se rafraîchit automatiquement. La connexion est détectée dès le scan.</div>
+              ) : (
+                <>
+                  <div className="text-[11.5px] text-muted2 mt-2 leading-relaxed">Le modèle « {name || "Nouveau modèle"} » est créé dans ton CRM. Une fois lié sur l'appareil, marque-le comme connecté.</div>
+                  <div className="flex gap-2.5 mt-4">
+                    <button onClick={closeConnect} className="btn-ghost flex-1 py-2.5 font-semibold">Plus tard</button>
+                    <button onClick={markConnectedManual} className="btn flex-1 py-2.5 font-bold">✓ Compte lié</button>
+                  </div>
+                </>
+              )}
+              {WORKER && <button onClick={closeConnect} className="btn-ghost w-full py-2.5 font-semibold mt-4">Fermer</button>}
             </div>}
+            {step === "done" && <div className="text-center py-8 text-acc font-bold text-lg">✓ {name || "Modèle"} connecté à Telegram</div>}
           </div>
         </div>
       )}

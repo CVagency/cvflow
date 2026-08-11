@@ -2,6 +2,15 @@
 import { createContext, useContext, useState, useEffect, useCallback } from "react";
 import { supabase, supabaseReady } from "./supabaseClient";
 
+const WORKER = process.env.NEXT_PUBLIC_TG_WORKER_URL;
+const WORKER_KEY = process.env.NEXT_PUBLIC_TG_WORKER_KEY;
+async function workerSend(modelId, tgUserId, text) {
+  if (!WORKER || !tgUserId) return;
+  try {
+    await fetch(WORKER + "/send", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, text }) });
+  } catch (e) { /* le message reste enregistré côté CRM même si l'envoi échoue */ }
+}
+
 const StoreCtx = createContext(null);
 export const useStore = () => useContext(StoreCtx);
 
@@ -84,7 +93,7 @@ export function StoreProvider({ children }) {
       const sc = {};
       (scriptsRes.data || []).forEach((s) => { (sc[s.model_id] = sc[s.model_id] || []).push([s.command, s.title, s.body]); });
       setScripts(sc);
-      setConvs((fansRes.data || []).map((f) => ({ id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: "", unread: 0, tag: f.tag, spent: Number(f.spent), src: f.source, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" })));
+      setConvs((fansRes.data || []).map((f) => ({ id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: "", unread: 0, tag: f.tag, spent: Number(f.spent), src: f.source, tgUserId: f.tg_user_id, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" })));
       setSalesLog((salesRes.data || []).map((s) => ({ user: s.member_id, model: s.model_id, price: Number(s.amount), date: s.created_at })));
       // reflect sales into team ca
       setTeam((prev) => prev.map((u) => { const ca = (salesRes.data || []).filter((s) => s.member_id === u.id).reduce((a, s) => a + Number(s.amount), 0); return { ...u, ca, sales: (salesRes.data || []).filter((s) => s.member_id === u.id).length }; }));
@@ -119,6 +128,7 @@ export function StoreProvider({ children }) {
     const fan = convs.find((c) => c.id === fanId);
     const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: fan?.model_id || activeModel, agency_id: profile.agency_id, sender_id: profile.id, direction: "out", kind: "text", body: text }).select().single();
     setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), mapMsg(data)] }));
+    workerSend(fan?.model_id || activeModel, fan?.tgUserId, text);   // envoi réel sur Telegram
   }, [convs, activeModel, profile]);
 
   const sendVaultItem = useCallback(async (fanId, modelId, folderIdx, itemIdx) => {
