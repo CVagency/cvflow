@@ -14,8 +14,12 @@ export default function Employees() {
   const isAdmin = profile?.role === "ADMIN";
 
   async function invite() {
-    setErr(""); setBusy(true);
-    const error = await addMember(form);
+    setErr("");
+    if (!form.email.trim() || !form.password) { setErr("Email et mot de passe requis."); return; }
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(form.email.trim())) { setErr("Adresse email invalide."); return; }
+    if (form.password.length < 6) { setErr("Le mot de passe doit faire au moins 6 caractères."); return; }
+    setBusy(true);
+    const error = await addMember({ ...form, email: form.email.trim() });
     setBusy(false);
     if (error) { setErr(error); return; }
     setOpen(false); setForm({ name: "", email: "", password: "", role: "CHATTER", pct: 8 });

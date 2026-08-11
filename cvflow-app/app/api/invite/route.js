@@ -23,12 +23,21 @@ export async function POST(req) {
   try { body = await req.json(); } catch { return json({ error: "Requête invalide" }, 400); }
   const { email, password, name, role, pct } = body || {};
   if (!email || !password) return json({ error: "Email et mot de passe requis" }, 400);
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return json({ error: "Adresse email invalide" }, 400);
+  if (String(password).length < 6) return json({ error: "Le mot de passe doit faire au moins 6 caractères" }, 400);
 
   const { data: created, error: cErr } = await admin.auth.admin.createUser({
     email, password, email_confirm: true,
     user_metadata: { name: name || email.split("@")[0], role: role || "CHATTER", pct: pct || 0, agency_id: me.agency_id },
   });
-  if (cErr) return json({ error: cErr.message }, 400);
+  if (cErr) {
+    const msg = (cErr.message || "").toLowerCase();
+    let friendly = cErr.message;
+    if (msg.includes("already") && (msg.includes("registered") || msg.includes("exist"))) friendly = "Cet email a déjà un compte CVFLOW. Utilise une adresse différente.";
+    else if (msg.includes("password")) friendly = "Mot de passe trop faible (min. 6 caractères).";
+    else if (msg.includes("email")) friendly = "Adresse email invalide ou refusée.";
+    return json({ error: friendly }, 400);
+  }
   return json({ ok: true, id: created?.user?.id });
 }
 

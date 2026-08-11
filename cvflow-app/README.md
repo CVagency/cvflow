@@ -1,21 +1,21 @@
-# CVFLOW — CRM de chatting WhatsApp & Telegram pour agences
+# CVFLOW — CRM de chatting Telegram pour agences
 
-App Next.js (App Router) + Tailwind. Coffre média connecté à Dropp, scripts par modèle, attribution des ventes au chatteur, rôles admin/chatteur, analytics, planning, employés à commission.
+App Next.js (App Router) + Tailwind + Supabase. Coffre média connecté à Dropp, scripts par modèle, attribution des ventes au chatteur, rôles admin/chatteur, analytics, planning, employés à commission. **CRM 100 % Telegram.**
 
 ## Statut du build
 
-**Phase 1 (ce repo)** — app fonctionnelle en mode démo (données locales dans le navigateur, aucune dépendance externe requise pour tourner). Structure prête à brancher Supabase.
+**Fonctionnel** — vraie authentification, base de données Supabase (Postgres + RLS multi-agences), données persistantes. Tout est neutre par défaut : chaque agence construit ses propres modèles, coffres, fans et plannings.
 
 - Login + rôles (Admin voit tout · Chatteur voit seulement Conversations + Planning)
-- Conversations : inbox unifiée, Coffre média avec aperçu + envoi 1 clic, scripts en `/`, emojis, fiche fan
-- Attribution des ventes au chatteur connecté
-- Coffre média (manager) : dossiers ordonnés, ajout média = coller le lien Dropp
-- Modèles : connexion Telegram par QR (simulée), fiche persona
-- Employés : commission % éditable → part = CA × %
-- Analytics, Planning (récap heures/CA par chatteur)
+- Conversations : inbox Telegram, Coffre média avec aperçu + envoi 1 clic, scripts en `/`, emojis, fiche fan
+- Attribution des ventes au chatteur connecté (crédité automatiquement)
+- Coffre média (manager) : dossiers ordonnés par niveau, ajout média = coller le lien Dropp ; un média peut combiner plusieurs types (photo + vidéo + audio)
+- Modèles : connexion Telegram par QR code, fiche persona
+- Employés : rôle + commission % éditables → part = CA × %
+- Planning : créneaux (shifts) réels par chatteur, récap heures/CA
+- Analytics : revenu par période, classement des modèles, top fans
 
-**Phase 2 (à venir)** — Telegram réel via un worker Node (GramJS/MTProto) + proxy FR, WhatsApp Business API.
-**Phase 3 (à venir)** — Dropp : liens collés dans le coffre + webhook de paiement qui déverrouille et attribue automatiquement.
+**À venir** — Telegram réel via un worker Node (GramJS/MTProto) + proxy FR ; webhook Dropp `payment.succeeded` qui déverrouille et attribue automatiquement le PPV.
 
 ## Lancer en local
 
@@ -24,29 +24,29 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-Connexion démo : **Admin** (Corentin) ou **Chatteur** (Tiana).
+## Configurer Supabase
+
+1. Créer un projet sur supabase.com.
+2. SQL Editor → coller `supabase/schema.sql` → Run (idempotent, réexécutable).
+3. Renseigner les variables d'environnement :
+   - `NEXT_PUBLIC_SUPABASE_URL`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY` (secrète — sert à créer les comptes membres côté serveur)
 
 ## Déployer sur Vercel
 
 1. Pousser ce dossier sur un repo GitHub.
-2. Sur vercel.com → **Add New → Project → Import** le repo. Framework détecté : Next.js. Deploy.
-3. (Optionnel Phase 2) ajouter les variables d'environnement `NEXT_PUBLIC_SUPABASE_URL` et `NEXT_PUBLIC_SUPABASE_ANON_KEY`.
+2. Sur vercel.com → **Add New → Project → Import** le repo. Framework détecté : Next.js.
+3. Ajouter les 3 variables d'environnement ci-dessus → Deploy.
 
-## Brancher Supabase (Phase 2)
-
-1. Créer un projet sur supabase.com.
-2. SQL Editor → coller `supabase/schema.sql` → Run.
-3. Renseigner `.env.local` à partir de `.env.example`.
-4. Remplacer les lectures/écritures du store (`lib/store.js`) par des requêtes Supabase (les points d'accroche sont commentés `// Phase 2`).
-
-## Architecture Telegram (Phase 2)
+## Architecture Telegram (à venir)
 
 Vercel serverless ne peut pas tenir une connexion MTProto permanente → un **worker Node séparé** (Railway/Fly/VPS) avec GramJS :
 - tient la session Telegram par modèle + proxy FR (anti-ban),
 - expose `POST /send` (le CRM appelle quand un chatteur envoie),
-- écoute les messages entrants → écrit dans Supabase (`messages`) → le CRM les affiche en temps réel (Supabase Realtime).
+- écoute les messages entrants → écrit dans Supabase (`cvflow_messages`) → le CRM les affiche en temps réel (Supabase Realtime).
 
-## Dropp (Phase 3)
+## Dropp
 
-- L'agence crée les liens payants sur Dropp et les colle dans le Coffre (`vault_items.dropp_link`).
-- Webhook Dropp `payment.succeeded` → insère dans `sales` avec le `member_id` du chatteur qui a envoyé → déverrouille le PPV et crédite le bon chatteur.
+- L'agence crée les liens payants sur Dropp et les colle dans le Coffre (`cvflow_vault_items.dropp_link`).
+- Webhook Dropp `payment.succeeded` → insère dans `cvflow_sales` avec le `member_id` du chatteur qui a envoyé → déverrouille le PPV et crédite le bon chatteur.

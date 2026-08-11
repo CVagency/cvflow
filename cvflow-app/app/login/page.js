@@ -40,7 +40,7 @@ export default function LoginPage() {
           <div className="font-extrabold text-xl">CVFLOW</div>
           <div className="badge text-acc bg-acc/15">BETA</div>
         </div>
-        <h1 className="text-4xl font-extrabold leading-tight max-w-xl">Le CRM de chatting <span className="text-acc">WhatsApp & Telegram</span> pour agences.</h1>
+        <h1 className="text-4xl font-extrabold leading-tight max-w-xl">Le CRM de chatting <span className="text-acc">Telegram</span> pour agences.</h1>
         <div className="flex flex-col gap-4 mt-8 max-w-md">
           {feats.map((f, i) => (
             <div key={i} className="flex gap-3">

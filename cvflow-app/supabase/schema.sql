@@ -100,6 +100,19 @@ create table if not exists cvflow_sales (
   created_at timestamptz default now()
 );
 
+-- Planning : créneaux (shifts) des chatteurs
+create table if not exists cvflow_shifts (
+  id uuid primary key default gen_random_uuid(),
+  agency_id uuid references cvflow_agencies(id) on delete cascade,
+  member_id uuid references cvflow_profiles(id) on delete cascade,
+  model_id uuid references cvflow_models(id) on delete set null,
+  day date not null,
+  start_min int not null default 540,   -- minutes depuis minuit (540 = 09:00)
+  end_min int not null default 1020,    -- 1020 = 17:00
+  note text,
+  created_at timestamptz default now()
+);
+
 -- Helper : agence de l'utilisateur courant
 create or replace function cvflow_my_agency() returns uuid
 language sql stable security definer set search_path = public as $$
@@ -141,7 +154,7 @@ create trigger cvflow_on_auth_user_created
 do $$
 declare t text;
 begin
-  foreach t in array array['cvflow_agencies','cvflow_profiles','cvflow_models','cvflow_vault_folders','cvflow_vault_items','cvflow_scripts','cvflow_fans','cvflow_messages','cvflow_sales']
+  foreach t in array array['cvflow_agencies','cvflow_profiles','cvflow_models','cvflow_vault_folders','cvflow_vault_items','cvflow_scripts','cvflow_fans','cvflow_messages','cvflow_sales','cvflow_shifts']
   loop
     execute format('alter table %I enable row level security;', t);
   end loop;
@@ -160,7 +173,7 @@ create policy p_prof_upd on cvflow_profiles for update using (agency_id = cvflow
 do $$
 declare t text;
 begin
-  foreach t in array array['cvflow_models','cvflow_fans','cvflow_messages','cvflow_sales']
+  foreach t in array array['cvflow_models','cvflow_fans','cvflow_messages','cvflow_sales','cvflow_shifts']
   loop
     execute format('drop policy if exists p_%1$s on %1$s;', t);
     execute format('create policy p_%1$s on %1$s for all using (agency_id = cvflow_my_agency()) with check (agency_id = cvflow_my_agency());', t);

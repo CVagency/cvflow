@@ -27,6 +27,7 @@ export function StoreProvider({ children }) {
   const [convs, setConvs] = useState([]);        // fans
   const [chats, setChats] = useState({});        // fanId -> [messages]
   const [salesLog, setSalesLog] = useState([]);
+  const [shifts, setShifts] = useState([]);      // [{id, member_id, model_id, day, start_min, end_min, note}]
   const [activeModel, setActiveModel] = useState(null);
 
   // ---- Auth ----
@@ -56,10 +57,13 @@ export function StoreProvider({ children }) {
       supabase.from("cvflow_models").select("*").eq("agency_id", agencyId).order("created_at"),
       supabase.from("cvflow_profiles").select("*").eq("agency_id", agencyId),
     ]);
-    const ms = (mRes.data || []).map((m) => ({ ...m, color: colorFor(m.name), c2: "#0d9488", wa: m.wa_connected, tg: m.tg_connected, dropp: !!m.dropp_api_key, fans: 0, ca30: 0, ppv: 0, conv: 0 }));
+    const ms = (mRes.data || []).map((m) => ({ ...m, color: colorFor(m.name), c2: "#0d9488", tg: m.tg_connected, dropp: !!m.dropp_api_key, fans: 0, ca30: 0, ppv: 0, conv: 0 }));
     setModels(ms);
     setTeam((pRes.data || []).map((p) => ({ id: p.id, name: p.name || p.email, email: p.email, role: p.role, pct: p.pct, models: ms.map((m) => m.id), msgs: 0, sales: 0, ca: 0, hours: 0, rt: "—", online: false, color: colorFor(p.name || p.email) })));
     if (ms.length && !activeModel) setActiveModel(ms[0].id);
+
+    const { data: shiftRows } = await supabase.from("cvflow_shifts").select("*").eq("agency_id", agencyId).order("day");
+    setShifts((shiftRows || []).map((sh) => ({ id: sh.id, member_id: sh.member_id, model_id: sh.model_id, day: sh.day, start_min: sh.start_min, end_min: sh.end_min, note: sh.note })));
 
     const modelIds = ms.map((m) => m.id);
     if (modelIds.length) {
@@ -138,10 +142,25 @@ export function StoreProvider({ children }) {
 
   // ---- CRUD ----
   const addModel = useCallback(async (name) => {
-    const { data } = await supabase.from("cvflow_models").insert({ agency_id: profile.agency_id, name, tg_connected: true }).select().single();
+    const { data } = await supabase.from("cvflow_models").insert({ agency_id: profile.agency_id, name, tg_connected: false }).select().single();
     if (data) { await supabase.from("cvflow_vault_folders").insert({ model_id: data.id, name: "Script Livre", position: 0 }); refresh(); }
     return data?.id;
   }, [profile, refresh]);
+
+  const setModelConnected = useCallback(async (modelId, connected) => {
+    await supabase.from("cvflow_models").update({ tg_connected: connected }).eq("id", modelId);
+    refresh();
+  }, [refresh]);
+
+  const addShift = useCallback(async ({ member_id, model_id, day, start_min, end_min, note }) => {
+    await supabase.from("cvflow_shifts").insert({ agency_id: profile.agency_id, member_id, model_id: model_id || null, day, start_min, end_min, note: note || null });
+    refresh();
+  }, [profile, refresh]);
+
+  const removeShift = useCallback(async (id) => {
+    await supabase.from("cvflow_shifts").delete().eq("id", id);
+    refresh();
+  }, [refresh]);
 
   const addFolder = useCallback(async (modelId, name) => {
     await supabase.from("cvflow_vault_folders").insert({ model_id: modelId, name });
@@ -211,8 +230,8 @@ export function StoreProvider({ children }) {
   const value = {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
-    models, team, vault, scripts, convs, chats, salesLog, activeModel, setActiveModel,
-    loadChat, sendMessage, sendVaultItem, markPaid, setPct, addMember, removeMember, setRole, deleteModel, addMedia, addModel, addFolder, addScript, addFan, saveFiche, saveNote, markRead, refresh,
+    models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
+    loadChat, sendMessage, sendVaultItem, markPaid, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

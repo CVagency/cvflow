@@ -3,7 +3,7 @@ import { StoreProvider } from "@/lib/store";
 
 export const metadata = {
   title: "CVFLOW — CRM Agence",
-  description: "CRM de chatting WhatsApp & Telegram pour agences — coffre média Dropp, scripts, attribution des ventes.",
+  description: "CRM de chatting Telegram pour agences — coffre média Dropp, scripts, attribution des ventes.",
 };
 
 export default function RootLayout({ children }) {

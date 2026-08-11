@@ -23,3 +23,5 @@ body {
 .inp { background:#0e1312; border:1px solid #1f2a26; border-radius:9px; color:#e9efec; outline:none; }
 .inp:focus { border-color:#22c55e; }
 .badge { font-size:10px; font-weight:700; padding:2px 8px; border-radius:20px; }
+.no-scrollbar::-webkit-scrollbar { display:none; }
+.no-scrollbar { -ms-overflow-style:none; scrollbar-width:none; }

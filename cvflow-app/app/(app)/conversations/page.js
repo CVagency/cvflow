@@ -1,11 +1,12 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/lib/store";
-import { initials, eur, thumbBg, TYPE_ICON, TAG_CLASS } from "@/lib/ui";
+import { initials, eur, thumbBg, typeIcons, typeLabel, TAG_CLASS } from "@/lib/ui";
+import ModelSwitcher from "@/components/ModelSwitcher";
 
 export default function Conversations() {
   const s = useStore();
-  const { models, convs, chats, scripts, team, currentUser, activeModel, setActiveModel } = s;
+  const { models, convs, chats, scripts, team, currentUser, activeModel } = s;
   const [activeConv, setActiveConv] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -14,7 +15,7 @@ export default function Conversations() {
   const [draft, setDraft] = useState("");
   const [showScripts, setShowScripts] = useState(false);
   const [addFanOpen, setAddFanOpen] = useState(false);
-  const [fanForm, setFanForm] = useState({ name: "", source: "tg", tag: "new" });
+  const [fanForm, setFanForm] = useState({ name: "", tag: "new" });
   const msgsRef = useRef(null);
 
   const emojis = ["😍", "🔥", "😏", "🥰", "😘", "😉", "🙈", "💦", "😈", "🥺", "❤️", "💸", "👀", "😊"];
@@ -22,8 +23,7 @@ export default function Conversations() {
   const modelConvs = convs.filter((c) => !activeModel || c.model_id === activeModel);
   const list = modelConvs.filter((c) => {
     if (filter === "unread") return c.unread > 0;
-    if (["vip", "whale", "new"].includes(filter)) return c.tag === filter;
-    if (filter === "wa" || filter === "tg") return c.src === filter;
+    if (["vip", "whale", "new", "cold"].includes(filter)) return c.tag === filter;
     return true;
   }).filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
 
@@ -45,14 +45,9 @@ export default function Conversations() {
   return (
     <div className="flex flex-col h-full bg-bg">
       <div className="flex gap-2 px-4 py-3 border-b border-line bg-bg2 items-center">
-        {models.map((m) => (
-          <button key={m.id} onClick={() => { setActiveModel(m.id); setActiveConv(null); setVaultOpen(false); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold border ${activeModel === m.id ? "border-acc text-txt bg-acc/15" : "border-line text-muted bg-panel"}`}>
-            <span className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] text-white" style={{ background: m.color }}>{m.name[0]}</span>{m.name}
-            <span className="text-[10px] bg-acc text-[#05130c] px-1.5 rounded-full font-bold">{convs.filter((c) => c.model_id === m.id).length}</span>
-          </button>
-        ))}
+        <ModelSwitcher onChange={() => { setActiveConv(null); setVaultOpen(false); }} />
         <div className="flex-1" />
-        <div className="badge text-muted bg-panel border border-line px-3 py-1.5 text-[11.5px]">Inbox unifiée · <span className="text-wa">WhatsApp</span> + <span className="text-tg">Telegram</span></div>
+        <div className="badge text-muted bg-panel border border-line px-3 py-1.5 text-[11.5px] flex items-center gap-1.5"><span className="text-tg">✈️ Telegram</span> · inbox</div>
       </div>
       <div className="flex-1 flex min-h-0">
         <div className="w-[300px] min-w-[300px] border-r border-line flex flex-col bg-bg2">
@@ -61,7 +56,7 @@ export default function Conversations() {
             <button onClick={() => setAddFanOpen(true)} className="btn px-3 text-sm font-bold" title="Ajouter un fan">＋</button>
           </div>
           <div className="flex gap-1.5 px-3 pb-2.5 overflow-x-auto">
-            {[["all", "Tous"], ["unread", "Non lus"], ["vip", "VIP"], ["whale", "Whales"], ["new", "Nouveaux"], ["wa", "WA"], ["tg", "TG"]].map((f) => (
+            {[["all", "Tous"], ["unread", "Non lus"], ["vip", "VIP"], ["whale", "Whales"], ["new", "Nouveaux"], ["cold", "Froids"]].map((f) => (
               <button key={f[0]} onClick={() => setFilter(f[0])} className={`text-[11.5px] px-2.5 py-1 rounded-full font-semibold whitespace-nowrap ${filter === f[0] ? "bg-acc/15 text-acc" : "bg-panel text-muted"}`}>{f[1]}</button>
             ))}
           </div>
@@ -71,7 +66,7 @@ export default function Conversations() {
               <div key={c.id} onClick={() => openConv(c.id)} className={`flex gap-2.5 px-3.5 py-3 border-b border-line cursor-pointer relative ${activeConv === c.id ? "bg-panel2 shadow-[inset_2px_0_0_#22c55e]" : "hover:bg-panel"}`}>
                 <div className="relative">
                   <div className="w-[42px] h-[42px] rounded-full flex items-center justify-center font-bold text-white" style={{ background: c.color }}>{initials(c.name)}</div>
-                  <div className="absolute -bottom-0.5 -right-0.5 w-[15px] h-[15px] rounded-full border-2 border-bg2" style={{ background: c.src === "wa" ? "#25d366" : "#3aa0e6" }} />
+                  <div className="absolute -bottom-0.5 -right-0.5 w-[15px] h-[15px] rounded-full border-2 border-bg2 flex items-center justify-center text-[8px]" style={{ background: "#3aa0e6" }}>✈️</div>
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-baseline"><span className="font-semibold text-[13.5px] truncate">{c.name}</span></div>
@@ -91,7 +86,7 @@ export default function Conversations() {
                 <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style={{ background: conv.color }}>{initials(conv.name)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-[15px] flex items-center gap-2">{conv.name} <span className={`badge ${TAG_CLASS[conv.tag]}`}>{conv.tag.toUpperCase()}</span></div>
-                  <div className="text-[12px] text-muted"><span style={{ color: conv.src === "wa" ? "#25d366" : "#3aa0e6" }}>● {conv.src === "wa" ? "WhatsApp" : "Telegram"}</span> · via {models.find((m) => m.id === conv.model_id)?.name} · toi = <b className="text-txt">{team.find((t) => t.id === currentUser)?.name?.split(" ")[0] || "moi"}</b></div>
+                  <div className="text-[12px] text-muted"><span style={{ color: "#3aa0e6" }}>✈️ Telegram</span> · via {models.find((m) => m.id === conv.model_id)?.name} · toi = <b className="text-txt">{team.find((t) => t.id === currentUser)?.name?.split(" ")[0] || "moi"}</b></div>
                 </div>
               </div>
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-[22px] flex flex-col gap-2.5">
@@ -133,9 +128,9 @@ export default function Conversations() {
                   {(folders[fi]?.items || []).map((it, idx) => (
                     <div key={it.id || idx} className="flex gap-3 items-center bg-panel border border-line rounded-xl p-2.5">
                       <div className="w-[58px] h-[58px] rounded-lg shrink-0 relative flex items-center justify-center text-xl" style={{ background: thumbBg(it.name) }}>
-                        <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 rounded">Lvl {it.lvl}</span>{TYPE_ICON[it.type]}
+                        <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 rounded">Lvl {it.lvl}</span>{typeIcons(it.type)}
                       </div>
-                      <div className="flex-1 min-w-0"><div className="font-bold text-[13px]">{it.name}</div><div className="text-[11px] text-muted mt-0.5">{TYPE_ICON[it.type]} {it.type} · {it.free ? <span className="text-acc font-bold">Gratuit</span> : <span className="text-gold font-extrabold">{it.price}€</span>}</div></div>
+                      <div className="flex-1 min-w-0"><div className="font-bold text-[13px]">{it.name}</div><div className="text-[11px] text-muted mt-0.5">{typeIcons(it.type)} {typeLabel(it.type)} · {it.free ? <span className="text-acc font-bold">Gratuit</span> : <span className="text-gold font-extrabold">{it.price}€</span>}</div></div>
                       <button onClick={() => s.sendVaultItem(activeConv, activeModel, fi, idx)} className="btn text-[12px] px-2.5 py-1.5 font-bold">Envoyer</button>
                     </div>
                   ))}
@@ -152,13 +147,11 @@ export default function Conversations() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setAddFanOpen(false); }}>
           <div className="card p-6 w-[440px] max-w-[92vw]">
             <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-extrabold">Ajouter un fan</h2><button onClick={() => setAddFanOpen(false)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
-            <label className="text-xs text-muted font-semibold block mb-1.5">Nom / pseudo</label>
-            <input className="inp w-full px-3 py-2.5 mb-3" value={fanForm.name} onChange={(e) => setFanForm({ ...fanForm, name: e.target.value })} placeholder="Ex: Jérémie" />
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div><label className="text-xs text-muted font-semibold block mb-1.5">Canal</label><select className="inp w-full px-3 py-2.5" value={fanForm.source} onChange={(e) => setFanForm({ ...fanForm, source: e.target.value })}><option value="tg">Telegram</option><option value="wa">WhatsApp</option></select></div>
-              <div><label className="text-xs text-muted font-semibold block mb-1.5">Tag</label><select className="inp w-full px-3 py-2.5" value={fanForm.tag} onChange={(e) => setFanForm({ ...fanForm, tag: e.target.value })}><option value="new">New</option><option value="vip">VIP</option><option value="whale">Whale</option><option value="cold">Cold</option></select></div>
-            </div>
-            <button onClick={async () => { await s.addFan(activeModel, fanForm.name || "Fan", fanForm.source, fanForm.tag); setAddFanOpen(false); setFanForm({ name: "", source: "tg", tag: "new" }); }} className="btn w-full py-2.5 font-bold">Ajouter</button>
+            <label className="text-xs text-muted font-semibold block mb-1.5">Nom / pseudo Telegram</label>
+            <input className="inp w-full px-3 py-2.5 mb-3" value={fanForm.name} onChange={(e) => setFanForm({ ...fanForm, name: e.target.value })} placeholder="Ex: @jeremie" />
+            <label className="text-xs text-muted font-semibold block mb-1.5">Tag</label>
+            <select className="inp w-full px-3 py-2.5 mb-4" value={fanForm.tag} onChange={(e) => setFanForm({ ...fanForm, tag: e.target.value })}><option value="new">New</option><option value="vip">VIP</option><option value="whale">Whale</option><option value="cold">Cold</option></select>
+            <button onClick={async () => { await s.addFan(activeModel, fanForm.name || "Fan", "tg", fanForm.tag); setAddFanOpen(false); setFanForm({ name: "", tag: "new" }); }} className="btn w-full py-2.5 font-bold">Ajouter</button>
           </div>
         </div>
       )}
@@ -177,7 +170,7 @@ function Bubble({ m, team, onPaid }) {
       <div className="self-end max-w-[60%] p-2 rounded-2xl border border-gold/35" style={{ background: "rgba(229,183,105,.07)" }}>
         <div className="flex gap-2.5 items-center">
           <div className="w-16 h-16 rounded-lg shrink-0 relative flex items-center justify-center text-xl overflow-hidden" style={{ background: thumbBg(m.name) }}>
-            {TYPE_ICON[m.type] || "📷"}{!m.unlocked && <div className="absolute inset-0 bg-black/35 flex items-center justify-center backdrop-blur-sm">🔒</div>}
+            {typeIcons(m.type) || "📷"}{!m.unlocked && <div className="absolute inset-0 bg-black/35 flex items-center justify-center backdrop-blur-sm">🔒</div>}
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[13px]">{m.name}</div>
@@ -207,7 +200,7 @@ function FanInfo({ conv, chats, store }) {
       <div className="text-center p-5 border-b border-line">
         <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2.5" style={{ background: conv.color }}>{initials(conv.name)}</div>
         <div className="font-bold text-base">{conv.name}</div>
-        <div className="text-[12px] text-muted mt-0.5">{conv.src === "wa" ? "📱 WhatsApp" : "✈️ Telegram"}</div>
+        <div className="text-[12px] text-muted mt-0.5">✈️ Telegram</div>
         <div className="mt-2.5"><span className={`badge ${TAG_CLASS[conv.tag]}`}>{conv.tag.toUpperCase()}</span></div>
       </div>
       <Section title="💸 Dépenses & achats">

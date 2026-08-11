@@ -1,13 +1,13 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "CVFLOW — Le CRM de chatting WhatsApp & Telegram pour agences",
+  title: "CVFLOW — Le CRM de chatting Telegram pour agences",
   description: "Coffre média connecté à Dropp Fans, scripts par modèle, attribution des ventes au chatteur, analytics en temps réel.",
 };
 
 const FEATS = [
   ["🗄️", "Coffre média avec aperçu", "Le manager prépare les liens Dropp par dossier et par niveau (Lvl 1→5). Le chatteur envoie en 1 clic, dans le bon ordre, sans ouvrir de Drive."],
-  ["💬", "Chatting sans friction", "Inbox unifiée WhatsApp + Telegram, scripts en « / », barre d'emojis, fiche fan complète à droite de chaque conversation."],
+  ["💬", "Chatting sans friction", "Inbox Telegram unifiée, scripts en « / », barre d'emojis, fiche fan complète à droite de chaque conversation."],
   ["📊", "Ventes attribuées sans bug", "Chaque média payant déverrouillé est crédité automatiquement au chatteur qui l'a envoyé. CA × commission calculés en temps réel."],
   ["🔒", "Anti-ban intégré", "Connexion Telegram par QR code ou numéro, proxy 4G résidentiel FR dédié par modèle, pacing des envois."],
   ["👥", "Équipe sous contrôle", "Rôles admin / chatteur, planning avec récap d'heures, CA/heure par chatteur, commissions éditables à tout moment."],
@@ -33,7 +33,7 @@ export default function Landing() {
 
       <section className="max-w-4xl mx-auto text-center px-6 pt-16 pb-14">
         <div className="inline-flex items-center gap-2 badge text-acc bg-acc/15 px-3 py-1.5 mb-6">🚀 Pensé par une agence, pour les agences</div>
-        <h1 className="text-5xl font-extrabold leading-[1.1] -tracking-wide">Le CRM de chatting<br /><span className="text-acc">WhatsApp & Telegram</span> pour agences.</h1>
+        <h1 className="text-5xl font-extrabold leading-[1.1] -tracking-wide">Le CRM de chatting<br /><span className="text-acc">Telegram</span> pour agences.</h1>
         <p className="text-muted text-lg mt-6 max-w-2xl mx-auto leading-relaxed">Coffre média connecté à Dropp Fans, scripts par modèle, attribution des ventes au chatteur, analytics en temps réel.</p>
         <div className="flex items-center justify-center gap-3 mt-9">
           <Link href="/login" className="btn px-7 py-3.5 text-[15px]">Essayer →</Link>

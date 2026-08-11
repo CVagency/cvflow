@@ -1,4 +1,9 @@
 export const TYPE_ICON = { photo: "📷", video: "🎬", audio: "🎧", bundle: "🗂️" };
+const TYPE_LABEL = { photo: "Photo", video: "Vidéo", audio: "Audio", bundle: "Bundle" };
+// Un média peut combiner plusieurs types : "photo,video" → 📷 🎬
+export function typeList(type) { return String(type || "photo").split(",").map((t) => t.trim()).filter(Boolean); }
+export function typeIcons(type) { return typeList(type).map((t) => TYPE_ICON[t] || "📎").join(" "); }
+export function typeLabel(type) { return typeList(type).map((t) => TYPE_LABEL[t] || t).join(" + "); }
 export const TAG_CLASS = {
   vip: "text-gold bg-gold/15", whale: "text-purple bg-purple/15", new: "text-acc bg-acc/15", cold: "text-muted bg-muted/15",
 };
