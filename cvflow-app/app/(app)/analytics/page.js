@@ -65,6 +65,13 @@ export default function Analytics() {
         ) : <AreaChart series={series} max={max} />}
         </div>
 
+        {totalCA > 0 && modelRows.filter((r) => r.ca > 0).length > 0 && (
+          <div className="card p-[18px] mb-4">
+            <h3 className="text-[13px] font-semibold text-muted mb-4">Répartition du revenu par modèle</h3>
+            <Donut data={modelRows.filter((r) => r.ca > 0).slice(0, 6).map((r) => ({ label: r.m.name, value: r.ca, color: r.m.color }))} />
+          </div>
+        )}
+
         <div className="card p-[18px]">
           <h3 className="text-[13px] font-semibold text-muted mb-3.5">Classement des modèles</h3>
           {totalCA === 0 ? <div className="text-muted2 text-[13px] py-6 text-center">Pas encore de ventes à classer.</div> : (
@@ -106,10 +113,32 @@ export default function Analytics() {
 
 function Stat({ label, value, hint, accent }) {
   return (
-    <div className="card p-4">
+    <div className="card p-4 relative overflow-hidden">
+      <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ background: accent ? "linear-gradient(90deg,#22c55e,#16a34a)" : "#1f2a26" }} />
       <div className="text-[11px] uppercase tracking-wide text-muted2 font-semibold">{label}</div>
-      <div className={`text-[26px] font-extrabold mt-1.5 ${accent ? "text-acc" : ""}`}>{value}</div>
+      <div className={`text-[27px] font-extrabold mt-1.5 ${accent ? "text-acc" : ""}`}>{value}</div>
       {hint && <div className="text-[11.5px] text-muted mt-0.5">{hint}</div>}
+    </div>
+  );
+}
+
+function Donut({ data }) {
+  const total = data.reduce((a, d) => a + d.value, 0) || 1;
+  const R = 52, C = 2 * Math.PI * R;
+  let off = 0;
+  return (
+    <div className="flex items-center gap-6 flex-wrap">
+      <svg width="132" height="132" viewBox="0 0 132 132" className="shrink-0">
+        <g transform="translate(66,66) rotate(-90)">
+          <circle r={R} fill="none" stroke="#1f2a26" strokeWidth="15" />
+          {data.map((d, i) => { const len = C * (d.value / total); const el = <circle key={i} r={R} fill="none" stroke={d.color} strokeWidth="15" strokeLinecap="round" strokeDasharray={`${Math.max(0, len - 2)} ${C - Math.max(0, len - 2)}`} strokeDashoffset={-off} />; off += len; return el; })}
+        </g>
+      </svg>
+      <div className="flex flex-col gap-2 min-w-[160px] flex-1">
+        {data.map((d, i) => (
+          <div key={i} className="flex items-center gap-2 text-[12.5px]"><span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: d.color }} /><span className="text-muted truncate">{d.label}</span><span className="font-bold ml-auto text-txt">{Math.round((d.value / total) * 100)}%</span></div>
+        ))}
+      </div>
     </div>
   );
 }

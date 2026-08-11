@@ -2,7 +2,21 @@
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import QRCode from "qrcode";
+import confetti from "canvas-confetti";
 import { useStore } from "@/lib/store";
+
+function fireConfetti() {
+  try {
+    const end = Date.now() + 900;
+    const colors = ["#22c55e", "#16a34a", "#e5b769", "#3aa0e6"];
+    (function frame() {
+      confetti({ particleCount: 5, angle: 60, spread: 60, origin: { x: 0, y: 0.6 }, colors });
+      confetti({ particleCount: 5, angle: 120, spread: 60, origin: { x: 1, y: 0.6 }, colors });
+      if (Date.now() < end) requestAnimationFrame(frame);
+    })();
+    confetti({ particleCount: 90, spread: 80, origin: { y: 0.5 }, colors });
+  } catch (e) { /* no-op */ }
+}
 
 const WORKER = process.env.NEXT_PUBLIC_TG_WORKER_URL;
 const WORKER_KEY = process.env.NEXT_PUBLIC_TG_WORKER_KEY;
@@ -40,6 +54,7 @@ export default function Models() {
     setBusy(true); setError(""); setQrImg(null);
     const id = await addModel(name || "Nouveau modèle");
     setBusy(false); setNewId(id); setStep("qr");
+    fireConfetti();
     if (WORKER && id) startWorkerConnect(id);
   }
 

@@ -8,11 +8,12 @@ import CopyLink from "@/components/CopyLink";
 const TYPES = [["photo", "📷", "Photo"], ["video", "🎬", "Vidéo"], ["audio", "🎧", "Audio"]];
 
 export default function Vault() {
-  const { models, vault, activeModel, addMedia, addFolder } = useStore();
+  const { models, vault, activeModel, addMedia, addFolder, deleteFolder, deleteMedia } = useStore();
   const current = activeModel || models[0]?.id;
   const [open, setOpen] = useState(null);
   const [folderOpen, setFolderOpen] = useState(false);
   const [folderName, setFolderName] = useState("");
+  const [confirmDel, setConfirmDel] = useState(null); // {type:'folder'|'media', id, name}
   const folders = vault[current] || [];
   const m = models.find((x) => x.id === current);
   const [form, setForm] = useState({ link: "", name: "", types: ["photo"], lvl: 1, price: 20 });
@@ -41,12 +42,13 @@ export default function Vault() {
 
       {folders.map((f, fi) => (
         <div key={f.folderId || fi} className="card mb-3.5 overflow-hidden">
-          <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-line bg-panel2">📁 <span className="font-bold text-sm">{f.folder}</span><span className="text-[11px] text-muted">· {f.items.length} médias ordonnés</span></div>
+          <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-line bg-panel2">📁 <span className="font-bold text-sm">{f.folder}</span><span className="text-[11px] text-muted">· {f.items.length} médias</span><div className="flex-1" /><button onClick={() => setConfirmDel({ type: "folder", id: f.folderId, name: f.folder })} className="w-7 h-7 rounded-lg bg-bg2 text-muted hover:text-danger flex items-center justify-center" title="Supprimer le dossier">🗑</button></div>
           <div className="grid gap-3 p-4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(150px,1fr))" }}>
             {f.items.map((it, i) => (
               <div key={it.id || i} className="border border-line rounded-lg overflow-hidden bg-bg2">
                 <div className="h-24 relative flex items-center justify-center text-2xl" style={{ background: thumbBg(it.name) }}>
                   <span className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Lvl {it.lvl}</span>{typeIcons(it.type)}
+                  <button onClick={() => setConfirmDel({ type: "media", id: it.id, name: it.name })} className="absolute top-1.5 right-1.5 w-6 h-6 rounded-md bg-black/60 text-white/80 hover:text-danger flex items-center justify-center text-[12px]" title="Supprimer ce média">✕</button>
                   <span className="absolute bottom-1.5 right-1.5 bg-black/50 text-white text-[9px] px-1.5 py-0.5 rounded">{typeLabel(it.type)}</span>
                 </div>
                 <div className="px-2.5 py-2">
@@ -96,6 +98,19 @@ export default function Vault() {
               <div><label className="text-xs text-muted font-semibold block mb-1.5">Prix (€) · 0 = gratuit</label><input type="number" className="inp w-full px-3 py-2.5" value={form.price} onChange={(e) => setForm({ ...form, price: parseInt(e.target.value) || 0 })} /></div>
             </div>
             <button onClick={async () => { await addMedia(current, open, { name: form.name || "Nouveau média", type: form.types.join(","), lvl: form.lvl, price: form.price, link: form.link }); setOpen(null); }} className="btn w-full py-2.5 font-bold">Ajouter au coffre</button>
+          </div>
+        </div>
+      )}
+
+      {confirmDel && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setConfirmDel(null); }}>
+          <div className="card p-6 w-[440px] max-w-[92vw]">
+            <div className="text-lg font-extrabold mb-2">Supprimer {confirmDel.type === "folder" ? "le dossier" : "le média"} « {confirmDel.name} » ?</div>
+            <div className="text-muted text-[13px] mb-5">{confirmDel.type === "folder" ? "Le dossier et tous les médias qu'il contient seront supprimés définitivement." : "Ce média sera retiré du coffre définitivement."}</div>
+            <div className="flex gap-2.5">
+              <button onClick={() => setConfirmDel(null)} className="btn-ghost flex-1 py-2.5 font-semibold">Annuler</button>
+              <button onClick={async () => { const d = confirmDel; setConfirmDel(null); if (d.type === "folder") await deleteFolder(d.id); else await deleteMedia(d.id); }} className="flex-1 py-2.5 font-bold rounded-[10px]" style={{ background: "#ef5f5f", color: "#fff" }}>Supprimer</button>
+            </div>
           </div>
         </div>
       )}

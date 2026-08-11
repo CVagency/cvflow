@@ -194,6 +194,16 @@ export function StoreProvider({ children }) {
     refresh();
   }, [vault, refresh]);
 
+  const deleteFolder = useCallback(async (folderId) => {
+    await supabase.from("cvflow_vault_folders").delete().eq("id", folderId);
+    refresh();
+  }, [refresh]);
+
+  const deleteMedia = useCallback(async (itemId) => {
+    await supabase.from("cvflow_vault_items").delete().eq("id", itemId);
+    refresh();
+  }, [refresh]);
+
   const addScript = useCallback(async (modelId, command, title, body) => {
     await supabase.from("cvflow_scripts").insert({ model_id: modelId, command, title, body });
     refresh();
@@ -252,7 +262,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
