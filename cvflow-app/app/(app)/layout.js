@@ -6,25 +6,23 @@ import { useStore, ROLE_VIEWS } from "@/lib/store";
 import { initials } from "@/lib/ui";
 
 const NAV = [
-  { group: "Pilotage", items: [
-    ["dashboard", "Tableau de bord"], ["conversations", "Conversations"], ["analytics", "Analytics"],
-    ["plannings", "Plannings"], ["scripts", "Scripts"],
-  ]},
-  { group: "Gestion", items: [
-    ["models", "Modèles"], ["vault", "Coffre média"], ["employees", "Employés"],
-  ]},
+  { group: "Pilotage", items: [["dashboard", "Tableau de bord"], ["conversations", "Conversations"], ["analytics", "Analytics"], ["plannings", "Plannings"], ["scripts", "Scripts"]] },
+  { group: "Gestion", items: [["models", "Modèles"], ["vault", "Coffre média"], ["employees", "Employés"]] },
 ];
-const PATH = { plannings: "planning" }; // route folder aliases
+const PATH = { plannings: "planning" };
 
 export default function AppLayout({ children }) {
-  const { auth, logout, team, currentUser, setCurrentUser } = useStore();
+  const { ready, loading, session, profile, logout } = useStore();
   const router = useRouter();
   const pathname = usePathname();
 
-  useEffect(() => { if (!auth) router.replace("/login"); }, [auth, router]);
-  if (!auth) return null;
+  useEffect(() => { if (ready && !loading && !session) router.replace("/login"); }, [ready, loading, session, router]);
 
-  const allow = ROLE_VIEWS[auth.role] || [];
+  if (!ready) return <Centered>Base de données non configurée.</Centered>;
+  if (loading) return <Centered>Chargement…</Centered>;
+  if (!session || !profile) return null;
+
+  const allow = ROLE_VIEWS[profile.role] || [];
   const href = (v) => "/" + (PATH[v] || v);
 
   return (
@@ -44,18 +42,14 @@ export default function AppLayout({ children }) {
                 <div className="text-[10px] uppercase tracking-wider text-muted2 px-3 pt-3.5 pb-1.5 font-semibold">{g.group}</div>
                 {items.map((it) => {
                   const active = pathname === href(it[0]);
-                  return (
-                    <Link key={it[0]} href={href(it[0])} className={`flex items-center gap-3 px-3 py-2 rounded-[10px] text-[13.5px] font-medium mb-0.5 ${active ? "bg-acc/15 text-acc" : "text-muted hover:bg-panel hover:text-txt"}`}>
-                      {it[1]}
-                    </Link>
-                  );
+                  return <Link key={it[0]} href={href(it[0])} className={`flex items-center gap-3 px-3 py-2 rounded-[10px] text-[13.5px] font-medium mb-0.5 ${active ? "bg-acc/15 text-acc" : "text-muted hover:bg-panel hover:text-txt"}`}>{it[1]}</Link>;
                 })}
               </div>
             );
           })}
         </nav>
         <div className="mt-auto pt-3 border-t border-line">
-          <button onClick={logout} className="flex items-center gap-3 px-3 py-2 rounded-[10px] text-[13.5px] font-medium w-full text-left text-muted hover:bg-panel hover:text-txt">Déconnexion</button>
+          <button onClick={async () => { await logout(); router.replace("/login"); }} className="flex items-center gap-3 px-3 py-2 rounded-[10px] text-[13.5px] font-medium w-full text-left text-muted hover:bg-panel hover:text-txt">Déconnexion</button>
         </div>
       </aside>
       <div className="flex-1 flex flex-col min-w-0">
@@ -63,17 +57,17 @@ export default function AppLayout({ children }) {
           <div className="text-[17px] font-bold capitalize">{(pathname.slice(1) || "dashboard").replace("planning", "plannings")}</div>
           <div className="flex-1" />
           <div className="badge text-acc bg-acc/15 flex items-center gap-1.5 px-3 py-1.5"><span className="w-1.5 h-1.5 rounded-full bg-acc" /> Opérationnel</div>
-          {auth.role === "ADMIN" && (
-            <div className="flex items-center gap-2 bg-panel border border-line2 pl-1 pr-2 py-1 rounded-full">
-              <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] text-white" style={{ background: team.find((t) => t.id === currentUser)?.color }}>{initials(team.find((t) => t.id === currentUser)?.name || "")}</div>
-              <select value={currentUser} onChange={(e) => setCurrentUser(e.target.value)} className="bg-transparent text-txt font-semibold text-[13px] outline-none cursor-pointer">
-                {team.map((t) => <option key={t.id} value={t.id}>{t.name.split(" ")[0]} · {t.role === "ADMIN" ? "Admin" : "Chatteur"}</option>)}
-              </select>
-            </div>
-          )}
+          <div className="flex items-center gap-2 bg-panel border border-line2 pl-1 pr-3 py-1 rounded-full">
+            <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] text-white" style={{ background: "#0d9488" }}>{initials(profile.name || profile.email || "?")}</div>
+            <span className="text-[13px] font-semibold">{(profile.name || profile.email)?.split(" ")[0]} · {profile.role === "ADMIN" ? "Admin" : "Chatteur"}</span>
+          </div>
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
     </div>
   );
+}
+
+function Centered({ children }) {
+  return <div className="fixed inset-0 flex items-center justify-center text-muted">{children}</div>;
 }

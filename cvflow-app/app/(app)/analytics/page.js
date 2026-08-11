@@ -7,7 +7,9 @@ import Kpi from "@/components/Kpi";
 export default function Analytics() {
   const { models, activeModel, setActiveModel } = useStore();
   const [tab, setTab] = useState("overview");
-  const m = models.find((x) => x.id === activeModel);
+  if (!models.length) return <div className="p-6"><div className="h-[60vh] flex flex-col items-center justify-center text-center gap-2"><div className="text-4xl opacity-40">📈</div><div className="font-bold text-lg">Pas encore de données</div><div className="text-muted text-sm">Les analytics s'afficheront dès tes premières ventes.</div></div></div>;
+  const current = activeModel || models[0].id;
+  const m = models.find((x) => x.id === current) || models[0];
   const ca = m.ca30;
   const daily = [42, 68, 55, 90, 120, 60, 48, 75, 52, 107, 88, 64, 95, 70, 58, 82, 110, 66, 74, 90, 130, 85, 60, 78, 102, 70, 55, 88, 96, 72, 84];
   const max = Math.max(...daily);
@@ -23,7 +25,7 @@ export default function Analytics() {
           {[["overview", "Vue agence"], ["models", "Modèles"], ["fans", "Fans"]].map((t) => <button key={t[0]} onClick={() => setTab(t[0])} className={`px-3.5 py-1.5 rounded-md text-[13px] font-semibold ${tab === t[0] ? "bg-acc/15 text-acc" : "text-muted"}`}>{t[1]}</button>)}
         </div>
         <div className="flex-1" />
-        <div className="badge text-muted bg-panel border border-line px-3 py-1.5">Modèle : <select value={activeModel} onChange={(e) => setActiveModel(e.target.value)} className="bg-transparent text-txt font-bold ml-1 outline-none cursor-pointer">{models.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
+        <div className="badge text-muted bg-panel border border-line px-3 py-1.5">Modèle : <select value={current} onChange={(e) => setActiveModel(e.target.value)} className="bg-transparent text-txt font-bold ml-1 outline-none cursor-pointer">{models.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
       </div>
 
       {tab === "overview" && <>

@@ -5,8 +5,7 @@ import { initials, eur, thumbBg, TYPE_ICON, TAG_CLASS } from "@/lib/ui";
 
 export default function Conversations() {
   const s = useStore();
-  const { models, convs, chats, scripts, team, currentUser } = s;
-  const [activeModel, setActiveModel] = useState("ange");
+  const { models, convs, chats, scripts, team, currentUser, activeModel, setActiveModel } = s;
   const [activeConv, setActiveConv] = useState(null);
   const [filter, setFilter] = useState("all");
   const [search, setSearch] = useState("");
@@ -14,12 +13,14 @@ export default function Conversations() {
   const [vaultFolder, setVaultFolder] = useState(0);
   const [draft, setDraft] = useState("");
   const [showScripts, setShowScripts] = useState(false);
+  const [addFanOpen, setAddFanOpen] = useState(false);
+  const [fanForm, setFanForm] = useState({ name: "", source: "tg", tag: "new" });
   const msgsRef = useRef(null);
 
-  const cnt = { ange: 24, lily: 19, lola: 8 };
   const emojis = ["😍", "🔥", "😏", "🥰", "😘", "😉", "🙈", "💦", "😈", "🥺", "❤️", "💸", "👀", "😊"];
 
-  const list = convs.filter((c) => {
+  const modelConvs = convs.filter((c) => !activeModel || c.model_id === activeModel);
+  const list = modelConvs.filter((c) => {
     if (filter === "unread") return c.unread > 0;
     if (["vip", "whale", "new"].includes(filter)) return c.tag === filter;
     if (filter === "wa" || filter === "tg") return c.src === filter;
@@ -31,7 +32,7 @@ export default function Conversations() {
 
   useEffect(() => { if (msgsRef.current) msgsRef.current.scrollTop = msgsRef.current.scrollHeight; }, [msgs, activeConv]);
 
-  function openConv(id) { setActiveConv(id); setVaultOpen(false); s.markRead(id); }
+  function openConv(id) { setActiveConv(id); setVaultOpen(false); s.markRead(id); if (!chats[id]) s.loadChat(id); }
   function send() { if (!draft.trim() || !activeConv) return; s.sendMessage(activeConv, draft.trim()); setDraft(""); setShowScripts(false); }
   function onDraft(v) { setDraft(v); setShowScripts(v.startsWith("/")); }
   function pickScript(txt) { setDraft(txt.replace("(name)", conv?.name || "")); setShowScripts(false); }
@@ -39,28 +40,33 @@ export default function Conversations() {
   const folders = s.vault[activeModel] || [];
   const fi = Math.min(vaultFolder, Math.max(0, folders.length - 1));
 
+  if (!models.length) return <Empty title="Aucun modèle connecté" sub="Va dans Modèles pour connecter un compte Telegram, puis reviens chatter." />;
+
   return (
     <div className="flex flex-col h-full bg-bg">
       <div className="flex gap-2 px-4 py-3 border-b border-line bg-bg2 items-center">
         {models.map((m) => (
           <button key={m.id} onClick={() => { setActiveModel(m.id); setActiveConv(null); setVaultOpen(false); }} className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-[13px] font-semibold border ${activeModel === m.id ? "border-acc text-txt bg-acc/15" : "border-line text-muted bg-panel"}`}>
             <span className="w-[22px] h-[22px] rounded-full flex items-center justify-center text-[10px] text-white" style={{ background: m.color }}>{m.name[0]}</span>{m.name}
-            <span className="text-[10px] bg-acc text-[#05130c] px-1.5 rounded-full font-bold">{cnt[m.id] ?? 0}</span>
+            <span className="text-[10px] bg-acc text-[#05130c] px-1.5 rounded-full font-bold">{convs.filter((c) => c.model_id === m.id).length}</span>
           </button>
         ))}
         <div className="flex-1" />
         <div className="badge text-muted bg-panel border border-line px-3 py-1.5 text-[11.5px]">Inbox unifiée · <span className="text-wa">WhatsApp</span> + <span className="text-tg">Telegram</span></div>
       </div>
       <div className="flex-1 flex min-h-0">
-        {/* list */}
         <div className="w-[300px] min-w-[300px] border-r border-line flex flex-col bg-bg2">
-          <div className="p-3"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher un contact…" className="inp w-full px-3 py-2.5 text-[13px]" /></div>
+          <div className="p-3 flex gap-2">
+            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Rechercher…" className="inp flex-1 px-3 py-2.5 text-[13px]" />
+            <button onClick={() => setAddFanOpen(true)} className="btn px-3 text-sm font-bold" title="Ajouter un fan">＋</button>
+          </div>
           <div className="flex gap-1.5 px-3 pb-2.5 overflow-x-auto">
             {[["all", "Tous"], ["unread", "Non lus"], ["vip", "VIP"], ["whale", "Whales"], ["new", "Nouveaux"], ["wa", "WA"], ["tg", "TG"]].map((f) => (
               <button key={f[0]} onClick={() => setFilter(f[0])} className={`text-[11.5px] px-2.5 py-1 rounded-full font-semibold whitespace-nowrap ${filter === f[0] ? "bg-acc/15 text-acc" : "bg-panel text-muted"}`}>{f[1]}</button>
             ))}
           </div>
           <div className="flex-1 overflow-y-auto">
+            {list.length === 0 && <div className="text-center text-muted2 text-[12.5px] p-6">Aucun fan pour ce modèle.<br />Clique sur ＋ pour en ajouter.</div>}
             {list.map((c) => (
               <div key={c.id} onClick={() => openConv(c.id)} className={`flex gap-2.5 px-3.5 py-3 border-b border-line cursor-pointer relative ${activeConv === c.id ? "bg-panel2 shadow-[inset_2px_0_0_#22c55e]" : "hover:bg-panel"}`}>
                 <div className="relative">
@@ -68,16 +74,14 @@ export default function Conversations() {
                   <div className="absolute -bottom-0.5 -right-0.5 w-[15px] h-[15px] rounded-full border-2 border-bg2" style={{ background: c.src === "wa" ? "#25d366" : "#3aa0e6" }} />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline"><span className="font-semibold text-[13.5px] truncate">{c.name}</span><span className="text-[11px] text-muted2 ml-1.5 shrink-0">{c.time}</span></div>
-                  <div className="text-[12.5px] text-muted truncate mt-0.5">{c.last}</div>
+                  <div className="flex justify-between items-baseline"><span className="font-semibold text-[13.5px] truncate">{c.name}</span></div>
                   <div className="mt-1"><span className={`badge ${TAG_CLASS[c.tag]}`}>{c.tag.toUpperCase()}</span></div>
                 </div>
-                {c.unread > 0 && <div className="absolute right-3.5 bottom-3.5 bg-acc text-[#05130c] text-[10px] font-bold min-w-[18px] h-[18px] rounded-full flex items-center justify-center px-1.5">{c.unread}</div>}
               </div>
             ))}
           </div>
         </div>
-        {/* chat */}
+
         <div className="flex-1 flex flex-col min-w-0 bg-bg relative overflow-hidden">
           {!conv ? (
             <div className="flex-1 flex flex-col items-center justify-center text-muted2 gap-3"><div className="text-5xl opacity-40">💬</div><div>Sélectionne une conversation</div></div>
@@ -87,12 +91,12 @@ export default function Conversations() {
                 <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style={{ background: conv.color }}>{initials(conv.name)}</div>
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-[15px] flex items-center gap-2">{conv.name} <span className={`badge ${TAG_CLASS[conv.tag]}`}>{conv.tag.toUpperCase()}</span></div>
-                  <div className="text-[12px] text-muted"><span style={{ color: conv.src === "wa" ? "#25d366" : "#3aa0e6" }}>● {conv.src === "wa" ? "WhatsApp" : "Telegram"}</span> · via {models.find((m) => m.id === activeModel)?.name} · tu chattes en <b className="text-txt">{team.find((t) => t.id === currentUser)?.name.split(" ")[0]}</b></div>
+                  <div className="text-[12px] text-muted"><span style={{ color: conv.src === "wa" ? "#25d366" : "#3aa0e6" }}>● {conv.src === "wa" ? "WhatsApp" : "Telegram"}</span> · via {models.find((m) => m.id === conv.model_id)?.name} · toi = <b className="text-txt">{team.find((t) => t.id === currentUser)?.name?.split(" ")[0] || "moi"}</b></div>
                 </div>
               </div>
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-[22px] flex flex-col gap-2.5">
-                <div className="self-center text-[11px] text-muted2 bg-panel px-3 py-0.5 rounded-full">Aujourd'hui</div>
-                {msgs.map((m, i) => <Bubble key={i} m={m} team={team} />)}
+                {msgs.length === 0 && <div className="self-center text-muted2 text-[12.5px] mt-6">Démarre la conversation ci-dessous.</div>}
+                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} />)}
               </div>
               <div className="border-t border-line px-3.5 py-2.5 bg-bg2 relative">
                 {showScripts && (
@@ -104,6 +108,7 @@ export default function Conversations() {
                         <div className="text-[12.5px] mt-0.5">{sc[2]}</div>
                       </div>
                     ))}
+                    {(scripts[activeModel] || []).length === 0 && <div className="px-3 py-3 text-[12px] text-muted2">Aucun script — ajoute-en dans l'onglet Scripts.</div>}
                   </div>
                 )}
                 <div className="flex gap-0.5 mb-2 flex-wrap items-center">
@@ -118,15 +123,15 @@ export default function Conversations() {
                   <button onClick={send} className="w-[42px] h-[42px] rounded-xl btn flex items-center justify-center text-lg">➤</button>
                 </div>
               </div>
-              {/* vault panel */}
               <div className={`absolute top-16 bottom-0 right-0 w-[420px] bg-bg2 border-l border-line2 shadow-2xl flex flex-col transition-transform z-40 ${vaultOpen ? "translate-x-0 visible" : "translate-x-[105%] invisible"}`}>
                 <div className="px-4 py-3.5 border-b border-line flex items-center justify-between"><h3 className="text-sm font-extrabold">🗄️ Coffre de {models.find((m) => m.id === activeModel)?.name}</h3><button onClick={() => setVaultOpen(false)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted flex items-center justify-center">✕</button></div>
                 <div className="flex gap-1.5 px-4 py-3 overflow-x-auto border-b border-line">
                   {folders.map((f, i) => <button key={i} onClick={() => setVaultFolder(i)} className={`text-[12px] px-3 py-1.5 rounded-full font-semibold whitespace-nowrap border ${i === fi ? "bg-acc/15 text-acc border-acc" : "bg-panel text-muted border-line"}`}>{f.folder} · {f.items.length}</button>)}
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-2.5">
+                  {folders.length === 0 && <div className="text-muted2 text-[12.5px] text-center py-4">Coffre vide — remplis-le dans l'onglet Coffre média.</div>}
                   {(folders[fi]?.items || []).map((it, idx) => (
-                    <div key={idx} className="flex gap-3 items-center bg-panel border border-line rounded-xl p-2.5">
+                    <div key={it.id || idx} className="flex gap-3 items-center bg-panel border border-line rounded-xl p-2.5">
                       <div className="w-[58px] h-[58px] rounded-lg shrink-0 relative flex items-center justify-center text-xl" style={{ background: thumbBg(it.name) }}>
                         <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 rounded">Lvl {it.lvl}</span>{TYPE_ICON[it.type]}
                       </div>
@@ -134,32 +139,51 @@ export default function Conversations() {
                       <button onClick={() => s.sendVaultItem(activeConv, activeModel, fi, idx)} className="btn text-[12px] px-2.5 py-1.5 font-bold">Envoyer</button>
                     </div>
                   ))}
-                  <div className="text-[11px] text-muted text-center py-2.5">Liens Dropp pré-préparés par le manager · aperçu visible · envoi en 1 clic</div>
                 </div>
               </div>
             </>
           )}
         </div>
-        {/* fan info */}
+
         {conv && <FanInfo conv={conv} chats={chats} store={s} />}
       </div>
+
+      {addFanOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setAddFanOpen(false); }}>
+          <div className="card p-6 w-[440px] max-w-[92vw]">
+            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-extrabold">Ajouter un fan</h2><button onClick={() => setAddFanOpen(false)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
+            <label className="text-xs text-muted font-semibold block mb-1.5">Nom / pseudo</label>
+            <input className="inp w-full px-3 py-2.5 mb-3" value={fanForm.name} onChange={(e) => setFanForm({ ...fanForm, name: e.target.value })} placeholder="Ex: Jérémie" />
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <div><label className="text-xs text-muted font-semibold block mb-1.5">Canal</label><select className="inp w-full px-3 py-2.5" value={fanForm.source} onChange={(e) => setFanForm({ ...fanForm, source: e.target.value })}><option value="tg">Telegram</option><option value="wa">WhatsApp</option></select></div>
+              <div><label className="text-xs text-muted font-semibold block mb-1.5">Tag</label><select className="inp w-full px-3 py-2.5" value={fanForm.tag} onChange={(e) => setFanForm({ ...fanForm, tag: e.target.value })}><option value="new">New</option><option value="vip">VIP</option><option value="whale">Whale</option><option value="cold">Cold</option></select></div>
+            </div>
+            <button onClick={async () => { await s.addFan(activeModel, fanForm.name || "Fan", fanForm.source, fanForm.tag); setAddFanOpen(false); setFanForm({ name: "", source: "tg", tag: "new" }); }} className="btn w-full py-2.5 font-bold">Ajouter</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-function Bubble({ m, team }) {
+function Empty({ title, sub }) {
+  return <div className="h-full flex flex-col items-center justify-center text-center gap-2 p-8"><div className="text-4xl opacity-40">🗂️</div><div className="font-bold text-lg">{title}</div><div className="text-muted text-sm max-w-sm">{sub}</div></div>;
+}
+
+function Bubble({ m, team, onPaid }) {
   if (m.t === "ppv") {
     const by = m.by ? team.find((t) => t.id === m.by) : null;
     return (
       <div className="self-end max-w-[60%] p-2 rounded-2xl border border-gold/35" style={{ background: "rgba(229,183,105,.07)" }}>
         <div className="flex gap-2.5 items-center">
           <div className="w-16 h-16 rounded-lg shrink-0 relative flex items-center justify-center text-xl overflow-hidden" style={{ background: thumbBg(m.name) }}>
-            {TYPE_ICON[m.type]}{!m.unlocked && <div className="absolute inset-0 bg-black/35 flex items-center justify-center backdrop-blur-sm">🔒</div>}
+            {TYPE_ICON[m.type] || "📷"}{!m.unlocked && <div className="absolute inset-0 bg-black/35 flex items-center justify-center backdrop-blur-sm">🔒</div>}
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[13px]">{m.name}</div>
             <div className="text-gold font-extrabold text-sm mt-0.5">{m.price > 0 ? m.price + "€ · Dropp" : "Gratuit"}</div>
-            <div className="text-[10.5px] text-muted mt-0.5">{m.folder} · Lvl {m.lvl} {m.unlocked ? <span className="text-acc font-bold">· payé ✓</span> : "· en attente"}{by ? ` · vendu par ${by.name.split(" ")[0]}` : ""}</div>
+            <div className="text-[10.5px] text-muted mt-0.5">{m.unlocked ? <span className="text-acc font-bold">payé ✓</span> : "en attente"}{by ? ` · ${by.name?.split(" ")[0]}` : ""}</div>
+            {!m.unlocked && m.price > 0 && <button onClick={onPaid} className="mt-1.5 text-[11px] font-bold text-acc border border-acc/40 rounded-md px-2 py-0.5 hover:bg-acc/10">Marquer payé (test)</button>}
           </div>
         </div>
         <div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
@@ -183,19 +207,13 @@ function FanInfo({ conv, chats, store }) {
       <div className="text-center p-5 border-b border-line">
         <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2.5" style={{ background: conv.color }}>{initials(conv.name)}</div>
         <div className="font-bold text-base">{conv.name}</div>
-        <div className="text-[12px] text-muted mt-0.5">{conv.src === "wa" ? "📱 WhatsApp" : "✈️ Telegram"} · fan depuis 2 mois</div>
+        <div className="text-[12px] text-muted mt-0.5">{conv.src === "wa" ? "📱 WhatsApp" : "✈️ Telegram"}</div>
         <div className="mt-2.5"><span className={`badge ${TAG_CLASS[conv.tag]}`}>{conv.tag.toUpperCase()}</span></div>
       </div>
       <Section title="💸 Dépenses & achats">
         <Row k="Total dépensé" v={eur(conv.spent)} acc />
         <Row k="PPV envoyés" v={ppv.length} />
         <Row k="PPV déverrouillés" v={unlocked} acc />
-        <Row k="Panier moyen" v={conv.spent ? eur(Math.round(conv.spent / Math.max(1, ppv.length))) : "—"} />
-      </Section>
-      <Section title="📊 Profil & scoring">
-        <Row k="Pouvoir d'achat" v={conv.spent > 1000 ? "Top 10%" : conv.spent > 300 ? "Élevé" : "Standard"} />
-        <Row k="Risque chargeback" v="Faible" acc />
-        <Row k="Conversion" v={ppv.length ? Math.round((unlocked / ppv.length) * 100) + "%" : "0%"} />
       </Section>
       <Section title="👤 Fiche fan">
         {fields.map((f) => (
@@ -206,7 +224,7 @@ function FanInfo({ conv, chats, store }) {
         ))}
       </Section>
       <Section title="📝 Notes privées" last>
-        <textarea defaultValue={conv.notes} onBlur={(e) => store.saveNote(conv.id, e.target.value)} placeholder="Ex: préfère les vidéos, dispo le soir…" className="w-full bg-panel border border-line rounded-lg p-2.5 text-[12.5px] resize-y min-h-[70px] outline-none" />
+        <textarea defaultValue={conv.notes} onBlur={(e) => store.saveNote(conv.id, e.target.value)} placeholder="Notes…" className="w-full bg-panel border border-line rounded-lg p-2.5 text-[12.5px] resize-y min-h-[70px] outline-none" />
       </Section>
     </div>
   );

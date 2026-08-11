@@ -34,12 +34,11 @@ export default function Landing() {
       <section className="max-w-4xl mx-auto text-center px-6 pt-16 pb-14">
         <div className="inline-flex items-center gap-2 badge text-acc bg-acc/15 px-3 py-1.5 mb-6">🚀 Pensé par une agence, pour les agences</div>
         <h1 className="text-5xl font-extrabold leading-[1.1] -tracking-wide">Le CRM de chatting<br /><span className="text-acc">WhatsApp & Telegram</span> pour agences.</h1>
-        <p className="text-muted text-lg mt-6 max-w-2xl mx-auto leading-relaxed">Coffre média connecté à Dropp Fans, scripts par modèle, attribution des ventes au chatteur, analytics en temps réel. Simple à mettre en place. Simple à chatter.</p>
+        <p className="text-muted text-lg mt-6 max-w-2xl mx-auto leading-relaxed">Coffre média connecté à Dropp Fans, scripts par modèle, attribution des ventes au chatteur, analytics en temps réel.</p>
         <div className="flex items-center justify-center gap-3 mt-9">
-          <Link href="/login" className="btn px-7 py-3.5 text-[15px]">Essayer la démo →</Link>
+          <Link href="/login" className="btn px-7 py-3.5 text-[15px]">Essayer →</Link>
           <a href="#pricing" className="btn-ghost px-7 py-3.5 text-[15px] font-semibold">Voir les tarifs</a>
         </div>
-        <div className="text-muted2 text-xs mt-5">Sans engagement · Connexion Telegram en 2 minutes par QR code</div>
       </section>
 
       <section className="max-w-6xl mx-auto px-6 pb-16">
@@ -71,9 +70,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <footer className="border-t border-line py-8 text-center text-muted2 text-xs">
-        CVFLOW © 2026 · Fait pour les agences de créatrices · <Link href="/login" className="text-acc">Connexion</Link>
-      </footer>
+      <footer className="border-t border-line py-8 text-center text-muted2 text-xs">CVFLOW © 2026 · <Link href="/login" className="text-acc">Connexion</Link></footer>
     </div>
   );
 }
