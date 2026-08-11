@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useStore } from "@/lib/store";
 import { thumbBg, typeIcons, typeLabel } from "@/lib/ui";
 import ModelSwitcher from "@/components/ModelSwitcher";
+import CopyLink from "@/components/CopyLink";
 
 const TYPES = [["photo", "📷", "Photo"], ["video", "🎬", "Vidéo"], ["audio", "🎧", "Audio"]];
 
@@ -48,7 +49,11 @@ export default function Vault() {
                   <span className="absolute top-1.5 left-1.5 bg-black/60 text-white text-[10px] font-bold px-1.5 py-0.5 rounded">Lvl {it.lvl}</span>{typeIcons(it.type)}
                   <span className="absolute bottom-1.5 right-1.5 bg-black/50 text-white text-[9px] px-1.5 py-0.5 rounded">{typeLabel(it.type)}</span>
                 </div>
-                <div className="px-2.5 py-2"><div className="text-[12px] font-semibold truncate">{it.name}</div><div className="text-[12px] font-bold mt-0.5" style={{ color: it.free ? "#22c55e" : "#e5b769" }}>{it.free ? "Gratuit" : it.price + "€"}</div></div>
+                <div className="px-2.5 py-2">
+                  <div className="text-[12px] font-semibold truncate">{it.name}</div>
+                  <div className="text-[12px] font-bold mt-0.5 mb-2" style={{ color: it.free ? "#22c55e" : "#e5b769" }}>{it.free ? "Gratuit" : it.price + "€"}</div>
+                  <CopyLink text={it.link} className="w-full text-[11px] font-bold py-1.5 rounded-md bg-tg/15 text-tg hover:bg-tg/25 border border-tg/30" />
+                </div>
               </div>
             ))}
             <button onClick={() => { setForm({ link: "", name: "", types: ["photo"], lvl: f.items.length + 1, price: 20 }); setOpen(fi); }} className="border border-dashed border-line2 rounded-lg flex items-center justify-center text-muted2 text-[13px] min-h-[150px] hover:text-acc hover:border-acc">＋ Ajouter un média Dropp</button>

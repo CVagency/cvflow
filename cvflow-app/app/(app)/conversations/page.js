@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/lib/store";
 import { initials, eur, thumbBg, typeIcons, typeLabel, TAG_CLASS } from "@/lib/ui";
 import ModelSwitcher from "@/components/ModelSwitcher";
+import CopyLink from "@/components/CopyLink";
 
 export default function Conversations() {
   const s = useStore();
@@ -16,6 +17,8 @@ export default function Conversations() {
   const [showScripts, setShowScripts] = useState(false);
   const [addFanOpen, setAddFanOpen] = useState(false);
   const [fanForm, setFanForm] = useState({ name: "", tag: "new" });
+  const [saleOpen, setSaleOpen] = useState(false);
+  const [saleForm, setSaleForm] = useState({ model_id: "", amount: "", fan_id: "" });
   const msgsRef = useRef(null);
 
   const emojis = ["😍", "🔥", "😏", "🥰", "😘", "😉", "🙈", "💦", "😈", "🥺", "❤️", "💸", "👀", "😊"];
@@ -35,7 +38,7 @@ export default function Conversations() {
   function openConv(id) { setActiveConv(id); setVaultOpen(false); s.markRead(id); if (!chats[id]) s.loadChat(id); }
   function send() { if (!draft.trim() || !activeConv) return; s.sendMessage(activeConv, draft.trim()); setDraft(""); setShowScripts(false); }
   function onDraft(v) { setDraft(v); setShowScripts(v.startsWith("/")); }
-  function pickScript(txt) { setDraft(txt.replace("(name)", conv?.name || "")); setShowScripts(false); }
+  function pickScript(txt) { const t = txt.replace("(name)", conv?.name || ""); setDraft(t); setShowScripts(false); try { navigator.clipboard.writeText(t); } catch {} }
 
   const folders = s.vault[activeModel] || [];
   const fi = Math.min(vaultFolder, Math.max(0, folders.length - 1));
@@ -47,7 +50,8 @@ export default function Conversations() {
       <div className="flex gap-2 px-4 py-3 border-b border-line bg-bg2 items-center">
         <ModelSwitcher onChange={() => { setActiveConv(null); setVaultOpen(false); }} />
         <div className="flex-1" />
-        <div className="badge text-muted bg-panel border border-line px-3 py-1.5 text-[11.5px] flex items-center gap-1.5"><span className="text-tg">✈️ Telegram</span> · inbox</div>
+        <button onClick={() => { setSaleForm({ model_id: activeModel || models[0]?.id || "", amount: "", fan_id: activeConv || "" }); setSaleOpen(true); }} className="btn px-3 py-1.5 text-[12.5px] font-bold">＋ Vente encaissée</button>
+        <div className="badge text-muted bg-panel border border-line px-3 py-1.5 text-[11.5px] flex items-center gap-1.5"><span className="text-tg">✈️ Telegram</span></div>
       </div>
       <div className="flex-1 flex min-h-0">
         <div className="w-[300px] min-w-[300px] border-r border-line flex flex-col bg-bg2">
@@ -131,7 +135,7 @@ export default function Conversations() {
                         <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 rounded">Lvl {it.lvl}</span>{typeIcons(it.type)}
                       </div>
                       <div className="flex-1 min-w-0"><div className="font-bold text-[13px]">{it.name}</div><div className="text-[11px] text-muted mt-0.5">{typeIcons(it.type)} {typeLabel(it.type)} · {it.free ? <span className="text-acc font-bold">Gratuit</span> : <span className="text-gold font-extrabold">{it.price}€</span>}</div></div>
-                      <button onClick={() => s.sendVaultItem(activeConv, activeModel, fi, idx)} className="btn text-[12px] px-2.5 py-1.5 font-bold">Envoyer</button>
+                      <CopyLink text={it.link} className="btn text-[12px] px-2.5 py-1.5 font-bold whitespace-nowrap" />
                     </div>
                   ))}
                 </div>
@@ -152,6 +156,22 @@ export default function Conversations() {
             <label className="text-xs text-muted font-semibold block mb-1.5">Tag</label>
             <select className="inp w-full px-3 py-2.5 mb-4" value={fanForm.tag} onChange={(e) => setFanForm({ ...fanForm, tag: e.target.value })}><option value="new">New</option><option value="vip">VIP</option><option value="whale">Whale</option><option value="cold">Cold</option></select>
             <button onClick={async () => { await s.addFan(activeModel, fanForm.name || "Fan", "tg", fanForm.tag); setAddFanOpen(false); setFanForm({ name: "", tag: "new" }); }} className="btn w-full py-2.5 font-bold">Ajouter</button>
+          </div>
+        </div>
+      )}
+
+      {saleOpen && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setSaleOpen(false); }}>
+          <div className="card p-6 w-[440px] max-w-[92vw]">
+            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-extrabold">Enregistrer une vente</h2><button onClick={() => setSaleOpen(false)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
+            <label className="text-xs text-muted font-semibold block mb-1.5">Modèle</label>
+            <select className="inp w-full px-3 py-2.5 mb-3" value={saleForm.model_id} onChange={(e) => setSaleForm({ ...saleForm, model_id: e.target.value })}>{models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
+            <label className="text-xs text-muted font-semibold block mb-1.5">Montant encaissé (€)</label>
+            <input type="number" className="inp w-full px-3 py-2.5 mb-3" value={saleForm.amount} onChange={(e) => setSaleForm({ ...saleForm, amount: e.target.value })} placeholder="Ex: 25" autoFocus />
+            <label className="text-xs text-muted font-semibold block mb-1.5">Fan (optionnel)</label>
+            <select className="inp w-full px-3 py-2.5 mb-3" value={saleForm.fan_id} onChange={(e) => setSaleForm({ ...saleForm, fan_id: e.target.value })}><option value="">— Aucun —</option>{modelConvs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+            <div className="text-[12px] text-muted mb-4 bg-bg2 rounded-lg px-3 py-2">Créditée à toi : <b className="text-txt">{team.find((t) => t.id === currentUser)?.name?.split(" ")[0] || "toi"}</b> · elle apparaît dans Analytics, Dashboard et tes commissions.</div>
+            <button onClick={async () => { if (!saleForm.amount) return; await s.logSale({ model_id: saleForm.model_id, amount: saleForm.amount, fan_id: saleForm.fan_id || null }); setSaleOpen(false); }} className="btn w-full py-2.5 font-bold">Enregistrer la vente</button>
           </div>
         </div>
       )}

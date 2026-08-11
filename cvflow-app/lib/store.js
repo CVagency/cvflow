@@ -140,6 +140,17 @@ export function StoreProvider({ children }) {
     loadChat(fanId); refresh();
   }, [profile, convs, loadChat, refresh]);
 
+  // Mode cockpit : le chatteur enregistre une vente encaissée sur Telegram → créditée à LUI (chatteur connecté)
+  const logSale = useCallback(async ({ model_id, amount, fan_id }) => {
+    const amt = Number(amount) || 0;
+    await supabase.from("cvflow_sales").insert({ agency_id: profile.agency_id, model_id: model_id || null, fan_id: fan_id || null, member_id: profile.id, amount: amt });
+    if (fan_id) {
+      const fan = convs.find((c) => c.id === fan_id);
+      if (fan) await supabase.from("cvflow_fans").update({ spent: Number(fan.spent) + amt }).eq("id", fan_id);
+    }
+    refresh();
+  }, [profile, convs, refresh]);
+
   // ---- CRUD ----
   const addModel = useCallback(async (name) => {
     const { data } = await supabase.from("cvflow_models").insert({ agency_id: profile.agency_id, name, tg_connected: false }).select().single();
@@ -231,7 +242,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, sendVaultItem, markPaid, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
