@@ -142,7 +142,7 @@ export function StoreProvider({ children }) {
     setChats((prev) => ({ ...prev, [fanId]: (data || []).map(mapMsg) }));
   }, []);
   function mapMsg(m) {
-    if (m.kind === "ppv") return { t: "ppv", id: m.id, name: m.body, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, folder: "", lvl: "", type: "photo", time: timeOf(m.created_at), date: m.created_at ? new Date(m.created_at).toLocaleDateString("fr-FR") : "" };
+    if (m.kind === "ppv") return { t: "ppv", id: m.id, name: m.body, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, tgId: m.tg_message_id, folder: "", lvl: "", type: "photo", time: timeOf(m.created_at), date: m.created_at ? new Date(m.created_at).toLocaleDateString("fr-FR") : "" };
     return { t: m.direction === "in" ? "in" : "out", id: m.id, tgId: m.tg_message_id, x: m.body, by: m.sender_id, time: timeOf(m.created_at) };
   }
   const sendMessage = useCallback(async (fanId, text, replyTo) => {
