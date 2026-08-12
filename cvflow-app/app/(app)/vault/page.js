@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useStore } from "@/lib/store";
+import { supabase } from "@/lib/supabaseClient";
 import { thumbBg, typeIcons, typeLabel } from "@/lib/ui";
 import ModelSwitcher from "@/components/ModelSwitcher";
 import CopyLink from "@/components/CopyLink";
@@ -17,6 +18,21 @@ export default function Vault() {
   const folders = vault[current] || [];
   const m = models.find((x) => x.id === current);
   const [form, setForm] = useState({ link: "", name: "", types: ["photo"], lvl: 1, price: 20 });
+  const [droppBusy, setDroppBusy] = useState(false);
+  const [droppErr, setDroppErr] = useState("");
+
+  async function fetchDropp() {
+    if (!form.link || !current) { setDroppErr("Colle d'abord le lien Dropp."); return; }
+    setDroppBusy(true); setDroppErr("");
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const r = await fetch("/api/dropp/link-info", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${session?.access_token}` }, body: JSON.stringify({ modelId: current, linkUrl: form.link }) });
+      const out = await r.json();
+      if (out?.ok) setForm((f) => ({ ...f, name: out.name || f.name, price: out.priceCents != null ? Math.round(out.priceCents / 100) : f.price, types: out.types?.length ? out.types : f.types }));
+      else setDroppErr(out?.error || "Échec de la récupération.");
+    } catch (e) { setDroppErr("Impossible de joindre Dropp."); }
+    setDroppBusy(false);
+  }
 
   function toggleType(t) {
     setForm((f) => {
@@ -79,7 +95,10 @@ export default function Vault() {
           <div className="card p-6 w-[520px] max-w-[92vw]">
             <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-extrabold">Ajouter un média · {folders[open].folder}</h2><button onClick={() => setOpen(null)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
             <label className="text-xs text-muted font-semibold block mb-1.5">Lien Dropp (copier-coller)</label>
-            <input className="inp w-full px-3 py-2.5 mb-3" value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder="https://dropp.fans/…" />
+            <input className="inp w-full px-3 py-2.5 mb-2" value={form.link} onChange={(e) => setForm({ ...form, link: e.target.value })} placeholder="https://app.dropp.fans/external/share/link/link_…" />
+            <button type="button" onClick={fetchDropp} disabled={droppBusy} className="btn-ghost text-[12px] px-2.5 py-1.5 mb-1 font-semibold disabled:opacity-50">{droppBusy ? "Récupération…" : "⤓ Récupérer prix & infos depuis Dropp"}</button>
+            {droppErr && <div className="text-danger text-[11.5px] mb-1">{droppErr}</div>}
+            <div className="mb-3" />
             <label className="text-xs text-muted font-semibold block mb-1.5">Nom du média</label>
             <input className="inp w-full px-3 py-2.5 mb-3" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="Ex: Vidéo douche complète" />
             <label className="text-xs text-muted font-semibold block mb-1.5">Type de contenu <span className="text-muted2 font-normal">(un lien peut en combiner plusieurs)</span></label>

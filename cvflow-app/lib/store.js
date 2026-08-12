@@ -182,20 +182,33 @@ export function StoreProvider({ children }) {
   const sendVaultItem = useCallback(async (fanId, modelId, folderIdx, itemIdx) => {
     const it = vault[modelId][folderIdx].items[itemIdx];
     const fan = convs.find((c) => c.id === fanId);
-    // Envoi réel du lien Dropp au fan (en texte) si le compte Telegram est relié : si ça échoue, on n'enregistre RIEN
+    // 1) On enregistre le PPV d'abord, pour avoir son id à passer dans les métadonnées Dropp
+    const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: modelId, agency_id: profile.agency_id, sender_id: profile.id, kind: "ppv", body: it.name, vault_item_id: it.id, price: it.free ? 0 : it.price, unlocked: !!it.free }).select().single();
+    if (!data) return { ok: false, error: "Erreur d'enregistrement du média" };
+
+    // 2) Copie trackée Dropp (métadonnées {message_id, fan_id}) → le paiement remontera tout seul via webhook
+    let sendUrl = it.link;
+    if (it.link && !it.free) {
+      try {
+        const { data: { session: s } } = await supabase.auth.getSession();
+        const r = await fetch("/api/dropp/send-link", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${s?.access_token}` }, body: JSON.stringify({ modelId, linkUrl: it.link, metadata: { message_id: data.id, fan_id: fanId } }) });
+        const out = await r.json();
+        if (out?.ok && out.checkoutUrl) sendUrl = out.checkoutUrl;   // sinon on garde le lien brut (Dropp pas connecté/erreur)
+      } catch (e) { /* fallback lien brut */ }
+    }
+
+    // 3) Envoi réel au fan ; si l'envoi échoue on retire le PPV (pas de média fantôme)
     let tgId = null;
-    if (WORKER && fan?.tgUserId && it.link) {
-      const caption = it.free ? `🎁 ${it.name}\n${it.link}` : `🔥 ${it.name} — ${it.price}€\n👉 ${it.link}`;
+    if (WORKER && fan?.tgUserId && sendUrl) {
+      const caption = it.free ? `🎁 ${it.name}\n${sendUrl}` : `🔥 ${it.name} — ${it.price}€\n👉 ${sendUrl}`;
       const res = await workerSend(modelId, fan.tgUserId, caption);
-      if (!res.ok) return { ok: false, error: res.error || "Envoi impossible (modèle déconnecté ou banni)" };
+      if (!res.ok) { await supabase.from("cvflow_messages").delete().eq("id", data.id); return { ok: false, error: res.error || "Envoi impossible (modèle déconnecté ou banni)" }; }
       tgId = res.tgId;
     }
-    const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: modelId, agency_id: profile.agency_id, sender_id: profile.id, kind: "ppv", body: it.name, vault_item_id: it.id, price: it.free ? 0 : it.price, unlocked: !!it.free }).select().single();
     const msg = mapMsg(data); msg.folder = vault[modelId][folderIdx].folder; msg.lvl = it.lvl; msg.type = it.type; if (tgId) msg.tgId = tgId;
     setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), msg] }));
-    if (tgId && data) await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
-    // NOTE: le déverrouillage réel viendra du webhook Dropp (Phase 3). Bouton manuel de test ci-dessous.
-    return { ok: true, id: data ? data.id : null };
+    if (tgId) await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
+    return { ok: true, id: data.id };
   }, [vault, profile, convs]);
 
   // Marque un PPV payé + crédite le chatteur (déclenché par le webhook Dropp en prod, ou manuellement ici)
