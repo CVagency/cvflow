@@ -113,7 +113,7 @@ export default function Conversations() {
               </div>
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-[22px] flex flex-col gap-2.5">
                 {msgs.length === 0 && <div className="self-center text-muted2 text-[12.5px] mt-6">Démarre la conversation ci-dessous.</div>}
-                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} onDelete={() => s.deleteChatMessage(conv.id, m.id, m.tgId)} />)}
+                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} onUnpaid={() => s.unmarkPaid(m.id, conv.id)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} onDelete={() => s.deleteChatMessage(conv.id, m.id, m.tgId)} />)}
               </div>
               <div className="border-t border-line px-3.5 py-2.5 bg-bg2 relative">
                 {showScripts && (
@@ -202,12 +202,13 @@ function Empty({ title, sub }) {
   return <div className="h-full flex flex-col items-center justify-center text-center gap-2 p-8"><div className="text-4xl opacity-40">🗂️</div><div className="font-bold text-lg">{title}</div><div className="text-muted text-sm max-w-sm">{sub}</div></div>;
 }
 
-function Bubble({ m, team, onPaid, onLike, onReply, onDelete }) {
+function Bubble({ m, team, onPaid, onUnpaid, onLike, onReply, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false);
   if (m.t === "ppv") {
     const by = m.by ? team.find((t) => t.id === m.by) : null;
     return (
-      <div className="self-end max-w-[60%] p-2 rounded-2xl border border-gold/35" style={{ background: "rgba(229,183,105,.07)" }}>
+      <div className="self-end max-w-[60%] group relative p-2 rounded-2xl border border-gold/35" style={{ background: "rgba(229,183,105,.07)" }}>
+        <button onClick={() => { if (confirmDel) { onDelete && onDelete(); } else { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 2500); } }} title="Supprimer ce média" className={`absolute -left-8 top-2 shrink-0 h-6 rounded-full text-[10px] font-bold flex items-center justify-center transition ${confirmDel ? "px-2 bg-danger/20 text-danger opacity-100" : "w-6 bg-panel2 text-muted hover:text-danger opacity-0 group-hover:opacity-100"}`}>{confirmDel ? "Sûr ?" : "🗑"}</button>
         <div className="flex gap-2.5 items-center">
           <div className="w-16 h-16 rounded-lg shrink-0 relative flex items-center justify-center text-xl overflow-hidden" style={{ background: thumbBg(m.name) }}>
             {typeIcons(m.type) || "📷"}{!m.unlocked && <div className="absolute inset-0 bg-black/35 flex items-center justify-center backdrop-blur-sm">🔒</div>}
@@ -216,7 +217,9 @@ function Bubble({ m, team, onPaid, onLike, onReply, onDelete }) {
             <div className="font-bold text-[13px]">{m.name}</div>
             <div className="text-gold font-extrabold text-sm mt-0.5">{m.price > 0 ? m.price + "€ · Dropp" : "Gratuit"}</div>
             <div className="text-[10.5px] text-muted mt-0.5">{m.price > 0 ? (m.unlocked ? <span className="text-acc font-bold">payé ✓</span> : <span className="text-gold">en attente de paiement</span>) : <span className="text-acc font-bold">🎁 offert</span>}{by ? ` · ${by.name?.split(" ")[0]}` : ""}</div>
-            {!m.unlocked && m.price > 0 && <button onClick={onPaid} className="mt-1.5 text-[11px] font-bold text-acc border border-acc/40 rounded-md px-2 py-0.5 hover:bg-acc/10">✓ Marquer encaissé</button>}
+            {m.price > 0 && (m.unlocked
+              ? <button onClick={onUnpaid} className="mt-1.5 text-[11px] font-bold text-muted2 border border-line rounded-md px-2 py-0.5 hover:text-danger hover:border-danger/40">↩ Annuler l'encaissement</button>
+              : <button onClick={onPaid} className="mt-1.5 text-[11px] font-bold text-acc border border-acc/40 rounded-md px-2 py-0.5 hover:bg-acc/10">✓ Marquer encaissé</button>)}
           </div>
         </div>
         <div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
@@ -253,7 +256,13 @@ function Bubble({ m, team, onPaid, onLike, onReply, onDelete }) {
 
 function FanInfo({ conv, chats, store }) {
   const ppv = (chats[conv.id] || []).filter((m) => m.t === "ppv");
-  const unlocked = ppv.filter((p) => p.unlocked && p.price > 0).length;
+  const paid = ppv.filter((p) => p.price > 0);
+  const bought = paid.filter((p) => p.unlocked);
+  const taux = paid.length ? Math.round((bought.length / paid.length) * 100) : 0;
+  const prices = paid.map((p) => p.price);
+  const prixMax = prices.length ? Math.max(...prices) : 0;
+  const prixMin = prices.length ? Math.min(...prices) : 0;
+  const encaisse = bought.reduce((a, p) => a + p.price, 0);
   const fields = [["age", "Âge"], ["location", "Localisation"], ["job", "Job"], ["relationship", "Situation"], ["interests", "Intérêts"], ["budget", "Budget"], ["timezone", "Fuseau"]];
   return (
     <div className="w-[290px] min-w-[290px] border-l border-line bg-bg2 overflow-y-auto max-[1250px]:hidden">
@@ -267,19 +276,36 @@ function FanInfo({ conv, chats, store }) {
           </div>
         </div>
       </div>
-      <Section title="💸 Dépenses & achats">
-        <Row k="Total dépensé" v={eur(conv.spent)} acc />
-        <Row k="PPV envoyés" v={ppv.length} />
-        <Row k="PPV achetés" v={unlocked} acc />
+      <Section title="📊 Performance PPV">
+        <div className="grid grid-cols-2 gap-2 mb-3">
+          <PpvStat label="Envoyés" value={paid.length} />
+          <PpvStat label="Achetés" value={bought.length} acc />
+          <PpvStat label="Prix max" value={prixMax ? prixMax + "€" : "—"} />
+          <PpvStat label="Prix min" value={prixMin ? prixMin + "€" : "—"} />
+        </div>
+        <div className="flex items-center justify-between text-[11.5px] mb-1"><span className="text-muted">Taux d'achat</span><span className="font-extrabold text-acc">{taux}% <span className="text-muted2 font-normal">({bought.length}/{paid.length})</span></span></div>
+        <div className="h-2 rounded-full bg-panel2 overflow-hidden mb-3"><div className="h-full rounded-full transition-all" style={{ width: taux + "%", background: "linear-gradient(90deg,#22c55e,#16a34a)" }} /></div>
+        <Row k="Total encaissé" v={eur(encaisse)} acc />
+        <Row k="Total dépensé (fan)" v={eur(conv.spent)} />
       </Section>
-      <Section title="🎬 PPV envoyés">
-        {ppv.length === 0 ? <div className="text-muted2 text-[12px] py-1">Aucun PPV envoyé à ce fan.</div> : ppv.slice().reverse().map((p, i) => (
-          <div key={i} className="flex items-center gap-2 py-1.5 text-[12px] border-b border-line/40 last:border-0">
-            <span className="truncate flex-1">{typeIcons(p.type)} {p.name}</span>
-            <span className="text-gold font-bold shrink-0">{p.price > 0 ? p.price + "€" : "gratuit"}</span>
-            <span className={`shrink-0 text-[11px] ${p.price > 0 && p.unlocked ? "text-acc font-bold" : "text-muted2"}`}>{p.price > 0 ? (p.unlocked ? "acheté ✓" : "non acheté") : "offert"}</span>
+      <Section title="🎬 Historique PPV">
+        {ppv.length === 0 ? <div className="text-muted2 text-[12px] py-1">Aucun PPV envoyé à ce fan.</div> : (
+          <div className="grid grid-cols-2 gap-2">
+            {ppv.slice().reverse().map((p, i) => (
+              <div key={i} className="rounded-lg overflow-hidden border border-line bg-panel">
+                <div className="h-[70px] relative flex items-center justify-center text-lg" style={{ background: thumbBg(p.name) }}>
+                  {typeIcons(p.type) || "📷"}
+                  {p.price > 0 && !p.unlocked && <div className="absolute inset-0 bg-black/45 flex items-center justify-center backdrop-blur-[2px] text-sm">🔒</div>}
+                  <span className="absolute top-1 left-1 bg-black/65 text-white text-[9px] font-extrabold px-1.5 py-0.5 rounded">{p.price > 0 ? p.price + "€" : "Gratuit"}</span>
+                </div>
+                <div className="px-1.5 py-1 flex items-center justify-between gap-1">
+                  <span className="text-[9px] text-muted2 truncate">{p.date || p.time}</span>
+                  <span className={`text-[9px] font-bold shrink-0 ${p.price > 0 ? (p.unlocked ? "text-acc" : "text-gold") : "text-acc"}`}>{p.price > 0 ? (p.unlocked ? "acheté" : "attente") : "offert"}</span>
+                </div>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </Section>
       <Section title="👤 Fiche fan">
         {fields.map((f) => (
@@ -300,4 +326,7 @@ function Section({ title, children, last }) {
 }
 function Row({ k, v, acc }) {
   return <div className="flex justify-between py-1.5 text-[12.5px]"><span className="text-muted">{k}</span><span className={`font-bold ${acc ? "text-acc" : ""}`}>{v}</span></div>;
+}
+function PpvStat({ label, value, acc }) {
+  return <div className="bg-bg2 rounded-lg p-2 text-center border border-line"><div className={`text-base font-extrabold ${acc ? "text-acc" : ""}`}>{value}</div><div className="text-[9.5px] text-muted2 uppercase mt-0.5">{label}</div></div>;
 }

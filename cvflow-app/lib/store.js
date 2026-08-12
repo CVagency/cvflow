@@ -142,7 +142,7 @@ export function StoreProvider({ children }) {
     setChats((prev) => ({ ...prev, [fanId]: (data || []).map(mapMsg) }));
   }, []);
   function mapMsg(m) {
-    if (m.kind === "ppv") return { t: "ppv", id: m.id, name: m.body, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, folder: "", lvl: "", type: "photo", time: timeOf(m.created_at) };
+    if (m.kind === "ppv") return { t: "ppv", id: m.id, name: m.body, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, folder: "", lvl: "", type: "photo", time: timeOf(m.created_at), date: m.created_at ? new Date(m.created_at).toLocaleDateString("fr-FR") : "" };
     return { t: m.direction === "in" ? "in" : "out", id: m.id, tgId: m.tg_message_id, x: m.body, by: m.sender_id, time: timeOf(m.created_at) };
   }
   const sendMessage = useCallback(async (fanId, text, replyTo) => {
@@ -207,6 +207,17 @@ export function StoreProvider({ children }) {
     if (fan) await supabase.from("cvflow_fans").update({ spent: Number(fan.spent) + Number(msg.price) }).eq("id", fanId);
     loadChat(fanId); refresh();
   }, [profile, convs, loadChat, refresh]);
+
+  // Annule un encaissement marqué par erreur : repasse en attente, retire la vente et le montant du fan
+  const unmarkPaid = useCallback(async (messageId, fanId) => {
+    const { data: msg } = await supabase.from("cvflow_messages").update({ unlocked: false }).eq("id", messageId).select().single();
+    if (!msg) return;
+    const { data: sale } = await supabase.from("cvflow_sales").select("id").eq("fan_id", fanId).eq("model_id", msg.model_id).eq("amount", msg.price).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (sale) await supabase.from("cvflow_sales").delete().eq("id", sale.id);
+    const fan = convs.find((c) => c.id === fanId);
+    if (fan) await supabase.from("cvflow_fans").update({ spent: Math.max(0, Number(fan.spent) - Number(msg.price)) }).eq("id", fanId);
+    loadChat(fanId); refresh();
+  }, [convs, loadChat, refresh]);
 
   // Mode cockpit : le chatteur enregistre une vente encaissée sur Telegram → créditée à LUI (chatteur connecté)
   const logSale = useCallback(async ({ model_id, amount, fan_id }) => {
@@ -329,7 +340,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, setDroppKey, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, markPaid, unmarkPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, setDroppKey, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }
