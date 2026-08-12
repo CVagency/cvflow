@@ -11,6 +11,8 @@ import { createClient } from "@supabase/supabase-js";
 import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
+import WebSocket from "ws";
+if (!globalThis.WebSocket) globalThis.WebSocket = WebSocket;
 
 const {
   API_ID, API_HASH,
@@ -23,7 +25,10 @@ if (!API_ID || !API_HASH) { console.error("❌ API_ID / API_HASH manquants (voir
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) { console.error("❌ SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY manquants"); process.exit(1); }
 
 const apiId = parseInt(API_ID, 10);
-const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+const supa = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false },
+  realtime: { transport: WebSocket },
+});
 
 // Etat en mémoire par modèle : { client, status, qrUrl, error, agency_id }
 const sessions = new Map();
