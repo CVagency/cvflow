@@ -55,7 +55,7 @@ export default function AppLayout({ children }) {
                 <div className="text-[10px] uppercase tracking-wider text-muted2 px-3 pt-3.5 pb-1.5 font-semibold">{g.group}</div>
                 {items.map((it) => {
                   const active = pathname === href(it[0]);
-                  return <Link key={it[0]} href={href(it[0])} className={`flex items-center gap-3 px-3 py-2 rounded-[10px] text-[13.5px] font-medium mb-0.5 ${active ? "bg-acc/15 text-acc" : "text-muted hover:bg-panel hover:text-txt"}`}>{it[1]}</Link>;
+                  return <Link key={it[0]} data-guide={it[0]} href={href(it[0])} className={`flex items-center gap-3 px-3 py-2 rounded-[10px] text-[13.5px] font-medium mb-0.5 ${active ? "bg-acc/15 text-acc" : "text-muted hover:bg-panel hover:text-txt"}`}>{it[1]}</Link>;
                 })}
               </div>
             );
