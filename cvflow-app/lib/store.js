@@ -5,10 +5,18 @@ import { supabase, supabaseReady } from "./supabaseClient";
 const WORKER = process.env.NEXT_PUBLIC_TG_WORKER_URL;
 const WORKER_KEY = process.env.NEXT_PUBLIC_TG_WORKER_KEY;
 async function workerSend(modelId, tgUserId, text, replyTo) {
-  if (!WORKER || !tgUserId) return;
+  if (!WORKER || !tgUserId) return null;
   try {
-    await fetch(WORKER + "/send", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, text, replyTo: replyTo || null }) });
-  } catch (e) { /* le message reste enregistré côté CRM même si l'envoi échoue */ }
+    const r = await fetch(WORKER + "/send", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, text, replyTo: replyTo || null }) });
+    const d = await r.json();
+    return d && d.tgMessageId ? d.tgMessageId : null;
+  } catch (e) { return null; /* le message reste enregistré côté CRM même si l'envoi échoue */ }
+}
+async function workerDelete(modelId, tgUserId, tgMessageId) {
+  if (!WORKER || !tgUserId || !tgMessageId) return;
+  try {
+    await fetch(WORKER + "/delete", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, tgMessageId }) });
+  } catch (e) { /* no-op */ }
 }
 async function workerReact(modelId, tgUserId, tgMessageId, emoji) {
   if (!WORKER || !tgUserId || !tgMessageId) return;
@@ -134,12 +142,23 @@ export function StoreProvider({ children }) {
     const fan = convs.find((c) => c.id === fanId);
     const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: fan?.model_id || activeModel, agency_id: profile.agency_id, sender_id: profile.id, direction: "out", kind: "text", body: text }).select().single();
     setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), mapMsg(data)] }));
-    workerSend(fan?.model_id || activeModel, fan?.tgUserId, text, replyTo);   // envoi réel sur Telegram (+ réponse à un message)
+    const tgId = await workerSend(fan?.model_id || activeModel, fan?.tgUserId, text, replyTo);   // envoi réel sur Telegram (+ réponse)
+    if (tgId && data) {
+      await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
+      setChats((prev) => ({ ...prev, [fanId]: (prev[fanId] || []).map((mm) => (mm.id === data.id ? { ...mm, tgId } : mm)) }));
+    }
   }, [convs, activeModel, profile]);
 
   const reactMessage = useCallback(async (fanId, tgMessageId, emoji) => {
     const fan = convs.find((c) => c.id === fanId);
     workerReact(fan?.model_id || activeModel, fan?.tgUserId, tgMessageId, emoji || "❤️");
+  }, [convs, activeModel]);
+
+  const deleteChatMessage = useCallback(async (fanId, messageId, tgMessageId) => {
+    const fan = convs.find((c) => c.id === fanId);
+    setChats((prev) => ({ ...prev, [fanId]: (prev[fanId] || []).filter((mm) => mm.id !== messageId) }));
+    await supabase.from("cvflow_messages").delete().eq("id", messageId);
+    if (tgMessageId) workerDelete(fan?.model_id || activeModel, fan?.tgUserId, tgMessageId);
   }, [convs, activeModel]);
 
   const setFanTag = useCallback(async (fanId, tag) => {
@@ -278,7 +297,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, reactMessage, setFanTag, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

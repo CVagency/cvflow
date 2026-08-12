@@ -106,7 +106,7 @@ export default function Conversations() {
               </div>
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-[22px] flex flex-col gap-2.5">
                 {msgs.length === 0 && <div className="self-center text-muted2 text-[12.5px] mt-6">Démarre la conversation ci-dessous.</div>}
-                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} />)}
+                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} onDelete={() => s.deleteChatMessage(conv.id, m.id, m.tgId)} />)}
               </div>
               <div className="border-t border-line px-3.5 py-2.5 bg-bg2 relative">
                 {showScripts && (
@@ -187,7 +187,8 @@ function Empty({ title, sub }) {
   return <div className="h-full flex flex-col items-center justify-center text-center gap-2 p-8"><div className="text-4xl opacity-40">🗂️</div><div className="font-bold text-lg">{title}</div><div className="text-muted text-sm max-w-sm">{sub}</div></div>;
 }
 
-function Bubble({ m, team, onPaid, onLike, onReply }) {
+function Bubble({ m, team, onPaid, onLike, onReply, onDelete }) {
+  const [confirmDel, setConfirmDel] = useState(false);
   if (m.t === "ppv") {
     const by = m.by ? team.find((t) => t.id === m.by) : null;
     return (
@@ -211,9 +212,12 @@ function Bubble({ m, team, onPaid, onLike, onReply }) {
   const by = m.by ? team.find((t) => t.id === m.by) : null;
   if (out) {
     return (
-      <div className="self-end max-w-[56%] flex flex-col items-end">
-        <div className="px-3.5 py-2.5 rounded-2xl rounded-br text-[13.5px] leading-relaxed text-[#eafff2]" style={{ background: "linear-gradient(135deg,#16a34a,#128a44)" }}>
-          {m.x}<div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
+      <div className="self-end max-w-[56%] flex flex-col items-end group">
+        <div className="flex items-end gap-1.5">
+          <button onClick={() => { if (confirmDel) { onDelete && onDelete(); } else { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 2500); } }} title="Supprimer ce message" className={`shrink-0 h-6 rounded-full text-[10px] font-bold flex items-center justify-center transition ${confirmDel ? "px-2 bg-danger/20 text-danger opacity-100" : "w-6 bg-panel2 text-muted hover:text-danger opacity-0 group-hover:opacity-100"}`}>{confirmDel ? "Sûr ?" : "🗑"}</button>
+          <div className="px-3.5 py-2.5 rounded-2xl rounded-br text-[13.5px] leading-relaxed text-[#eafff2]" style={{ background: "linear-gradient(135deg,#16a34a,#128a44)" }}>
+            {m.x}<div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
+          </div>
         </div>
         {by && <div className="text-[10px] text-muted2 mt-0.5 mr-1">envoyé par <b className="text-muted">{by.name?.split(" ")[0]}</b></div>}
       </div>
