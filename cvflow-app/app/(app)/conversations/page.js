@@ -1,9 +1,11 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/lib/store";
-import { initials, eur, thumbBg, typeIcons, typeLabel, TAG_CLASS, TAGS } from "@/lib/ui";
+import { initials, eur, thumbBg, typeIcons, typeLabel, TAG_CLASS, TAG_LABEL, TAGS } from "@/lib/ui";
 import ModelSwitcher from "@/components/ModelSwitcher";
 import CopyLink from "@/components/CopyLink";
+
+function spentColor(n) { n = Number(n) || 0; if (n >= 100) return "#22c55e"; if (n > 0) return "#e5b769"; return "#5f6b66"; }
 
 export default function Conversations() {
   const s = useStore();
@@ -82,8 +84,8 @@ export default function Conversations() {
                   <div className="absolute -bottom-0.5 -right-0.5 w-[15px] h-[15px] rounded-full border-2 border-bg2 flex items-center justify-center text-[8px]" style={{ background: "#3aa0e6" }}>✈️</div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-baseline"><span className="font-semibold text-[13.5px] truncate">{c.name}</span></div>
-                  <div className="mt-1"><span className={`badge ${TAG_CLASS[c.tag]}`}>{c.tag.toUpperCase()}</span></div>
+                  <div className="flex justify-between items-center gap-2"><span className="font-semibold text-[13.5px] truncate">{c.name}</span><span className="text-[12.5px] font-extrabold shrink-0" style={{ color: spentColor(c.spent) }}>{eur(c.spent)}</span></div>
+                  <div className="mt-1"><span className={`badge ${TAG_CLASS[c.tag]}`}>{(TAG_LABEL[c.tag] || c.tag).toUpperCase()}</span></div>
                 </div>
               </div>
             ))}
@@ -168,8 +170,10 @@ export default function Conversations() {
             <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-extrabold">Ajouter un fan</h2><button onClick={() => setAddFanOpen(false)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
             <label className="text-xs text-muted font-semibold block mb-1.5">Nom / pseudo Telegram</label>
             <input className="inp w-full px-3 py-2.5 mb-3" value={fanForm.name} onChange={(e) => setFanForm({ ...fanForm, name: e.target.value })} placeholder="Ex: @jeremie" />
-            <label className="text-xs text-muted font-semibold block mb-1.5">Tag</label>
-            <select className="inp w-full px-3 py-2.5 mb-4" value={fanForm.tag} onChange={(e) => setFanForm({ ...fanForm, tag: e.target.value })}><option value="new">New</option><option value="vip">VIP</option><option value="whale">Whale</option><option value="cold">Cold</option></select>
+            <label className="text-xs text-muted font-semibold block mb-1.5">Catégorie</label>
+            <div className="flex flex-wrap gap-2 mb-4">
+              {TAGS.map((t) => <button key={t[0]} type="button" onClick={() => setFanForm({ ...fanForm, tag: t[0] })} className={`text-[12px] px-3 py-1.5 rounded-full font-semibold border transition ${fanForm.tag === t[0] ? `${TAG_CLASS[t[0]]} border-transparent` : "bg-bg2 border-line text-muted hover:border-line2"}`}>{t[1]}</button>)}
+            </div>
             <button onClick={async () => { await s.addFan(activeModel, fanForm.name || "Fan", "tg", fanForm.tag); setAddFanOpen(false); setFanForm({ name: "", tag: "new" }); }} className="btn w-full py-2.5 font-bold">Ajouter</button>
           </div>
         </div>
@@ -238,7 +242,11 @@ function FanInfo({ conv, chats, store }) {
         <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2.5" style={{ background: conv.color }}>{initials(conv.name)}</div>
         <div className="font-bold text-base">{conv.name}</div>
         <div className="text-[12px] text-muted mt-0.5">✈️ Telegram</div>
-        <div className="mt-3"><span className="text-[10px] text-muted2 uppercase tracking-wide block mb-1">Catégorie</span><select value={conv.tag} onChange={(e) => store.setFanTag(conv.id, e.target.value)} className="inp px-2.5 py-1.5 text-[12.5px] font-semibold w-full">{TAGS.map((t) => <option key={t[0]} value={t[0]}>{t[1]}</option>)}</select></div>
+        <div className="mt-3"><span className="text-[10px] text-muted2 uppercase tracking-wide block mb-1.5">Catégorie</span>
+          <div className="flex flex-wrap gap-1.5 justify-center">
+            {TAGS.map((t) => <button key={t[0]} onClick={() => store.setFanTag(conv.id, t[0])} className={`text-[11px] px-2.5 py-1 rounded-full font-semibold border transition ${conv.tag === t[0] ? `${TAG_CLASS[t[0]]} border-transparent` : "bg-panel border-line text-muted hover:border-line2"}`}>{t[1]}</button>)}
+          </div>
+        </div>
       </div>
       <Section title="💸 Dépenses & achats">
         <Row k="Total dépensé" v={eur(conv.spent)} acc />
