@@ -27,7 +27,8 @@ export async function POST(req) {
   try {
     const r = await fetch(`${DROPP_API}/links/${linkId}`, { headers: { authorization: `Bearer ${model.dropp_api_key}` } });
     if (!r.ok) { let e = {}; try { e = await r.json(); } catch (x) {} return json({ error: e?.error?.message || `Dropp a répondu ${r.status}` }, 400); }
-    const d = await r.json();
+    const raw = await r.json();
+    const d = raw && raw.data && !Array.isArray(raw.data) ? raw.data : raw;   // Dropp enveloppe parfois dans { data: {...} }
     const typeMap = { image: "photo", video: "video", audio: "audio" };
     const types = (d?.contents?.types || []).map((t) => typeMap[String(t).toLowerCase()] || "photo");
     return json({ ok: true, name: d?.name || "", priceCents: d?.price?.amount_cents ?? null, priceDisplay: d?.price?.display || "", types: types.length ? [...new Set(types)] : ["photo"] });
