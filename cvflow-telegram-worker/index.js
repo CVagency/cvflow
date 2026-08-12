@@ -12,6 +12,9 @@ import { TelegramClient, Api } from "telegram";
 import { StringSession } from "telegram/sessions/index.js";
 import { NewMessage } from "telegram/events/index.js";
 import WebSocket from "ws";
+
+// Node < 22 n'a pas de WebSocket natif : on en fournit un pour @supabase/realtime-js
+// (le worker n'utilise PAS le realtime, mais createClient l'instancie quand même).
 if (!globalThis.WebSocket) globalThis.WebSocket = WebSocket;
 
 const {
@@ -40,6 +43,23 @@ async function loadModel(modelId) {
 }
 async function saveSession(modelId, sessionStr) {
   await supa.from("cvflow_models").update({ tg_session: sessionStr, tg_connected: true }).eq("id", modelId);
+}
+// Charge les dialogues pour peupler le cache d'entités → permet d'écrire aux fans par leur user_id
+async function primeEntities(client) {
+  try { await client.getDialogs({ limit: 300 }); } catch (e) { console.error("prime entities", e?.message || e); }
+}
+// Résout un fan (user_id numérique) en InputPeer avec son access_hash (depuis le cache primé)
+async function resolvePeer(client, tgUserId) {
+  const id = /^\d+$/.test(String(tgUserId)) ? Number(tgUserId) : tgUserId;
+  try { return await client.getInputEntity(id); } catch (e) { return id; }
+}
+function isAuthError(msg) { return /AUTH_KEY_DUPLICATED|AUTH_KEY_UNREGISTERED|SESSION_REVOKED|USER_DEACTIVATED|AUTH_KEY_PERM_EMPTY|SESSION_PASSWORD_NEEDED/.test(String(msg || "")); }
+// Session Telegram morte (ex: AUTH_KEY_DUPLICATED) → on la vide et on marque le modèle à reconnecter
+async function markDead(modelId, err) {
+  const st = sessions.get(modelId);
+  if (st?.client) { try { await st.client.disconnect(); } catch (e) {} }
+  sessions.set(modelId, { status: "error", qrUrl: null, error: "Session expirée — reconnecte le modèle (scan QR)", agency_id: st?.agency_id || null, client: null });
+  try { await supa.from("cvflow_models").update({ tg_connected: false, tg_session: null }).eq("id", modelId); } catch (e) {}
 }
 function parseProxy(raw) {
   // Format attendu : "socks5://user:pass@host:port" ou "host:port:user:pass"
@@ -90,20 +110,32 @@ async function connectModel(modelId) {
   sessions.set(modelId, st);
 
   const proxy = parseProxy(model.tg_proxy);
-  const client = new TelegramClient(new StringSession(model.tg_session || ""), apiId, API_HASH, {
-    connectionRetries: 5, ...(proxy ? { proxy } : {}),
-  });
-  st.client = client;
-  await client.connect();
+  const opts = { connectionRetries: 5, ...(proxy ? { proxy } : {}) };
 
-  if (await client.checkAuthorization()) {
-    st.status = "connected";
-    await saveSession(modelId, client.session.save());
-    attachHandlers(modelId, model.agency_id, client);
-    return st;
+  // 1) On tente la session sauvegardée. Si elle est morte (AUTH_KEY_DUPLICATED, révoquée…), on repart sur un QR neuf.
+  if (model.tg_session) {
+    try {
+      const saved = new TelegramClient(new StringSession(model.tg_session), apiId, API_HASH, opts);
+      st.client = saved;
+      await saved.connect();
+      if (await saved.checkAuthorization()) {
+        st.status = "connected";
+        await saveSession(modelId, saved.session.save());
+        attachHandlers(modelId, model.agency_id, saved);
+        await primeEntities(saved);
+        return st;
+      }
+      try { await saved.disconnect(); } catch (e) {}
+    } catch (e) {
+      console.error("session sauvegardée invalide", modelId, e?.message || e);
+    }
   }
 
-  // Login par QR — resout quand le compte scanne
+  // 2) Login par QR avec une session VIERGE — resout quand le compte scanne
+  const client = new TelegramClient(new StringSession(""), apiId, API_HASH, opts);
+  st.client = client;
+  st.status = "connecting"; st.qrUrl = null; st.error = null;
+  await client.connect();
   client.signInUserWithQrCode(
     { apiId, apiHash: API_HASH },
     {
@@ -115,6 +147,7 @@ async function connectModel(modelId) {
     st.status = "connected"; st.qrUrl = null;
     await saveSession(modelId, client.session.save());
     attachHandlers(modelId, model.agency_id, client);
+    await primeEntities(client);
     console.log("✅ Modèle connecté:", modelId);
   }).catch((e) => { st.status = "error"; st.error = String(e?.message || e); });
 
@@ -154,41 +187,56 @@ app.get("/status/:modelId", (req, res) => {
 
 // Envoi d'un message vers un fan (par son tg_user_id), avec réponse optionnelle
 app.post("/send", async (req, res) => {
+  const { modelId, tgUserId, text, replyTo } = req.body || {};
   try {
-    const { modelId, tgUserId, text, replyTo } = req.body || {};
     const st = sessions.get(modelId);
     if (!st || st.status !== "connected") return res.status(409).json({ error: "modèle non connecté" });
     const opts = { message: text };
     if (replyTo) opts.replyTo = parseInt(replyTo, 10);
-    const sent = await st.client.sendMessage(tgUserId, opts);
+    const peer = await resolvePeer(st.client, tgUserId);
+    const sent = await st.client.sendMessage(peer, opts);
     res.json({ ok: true, tgMessageId: sent && sent.id ? String(sent.id) : null });
-  } catch (e) { res.status(500).json({ error: String(e?.message || e) }); }
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (isAuthError(msg)) { await markDead(modelId, msg); return res.status(409).json({ error: "Session Telegram expirée — reconnecte le modèle (scan QR)" }); }
+    res.status(500).json({ error: msg });
+  }
 });
 
 // Suppression d'un message (pour tout le monde)
 app.post("/delete", async (req, res) => {
+  const { modelId, tgUserId, tgMessageId } = req.body || {};
   try {
-    const { modelId, tgUserId, tgMessageId } = req.body || {};
     const st = sessions.get(modelId);
     if (!st || st.status !== "connected") return res.status(409).json({ error: "modèle non connecté" });
-    await st.client.deleteMessages(tgUserId, [parseInt(tgMessageId, 10)], { revoke: true });
+    const peer = await resolvePeer(st.client, tgUserId);
+    await st.client.deleteMessages(peer, [parseInt(tgMessageId, 10)], { revoke: true });
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: String(e?.message || e) }); }
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (isAuthError(msg)) { await markDead(modelId, msg); return res.status(409).json({ error: "Session Telegram expirée — reconnecte le modèle" }); }
+    res.status(500).json({ error: msg });
+  }
 });
 
 // Réaction (like) sur un message reçu
 app.post("/react", async (req, res) => {
+  const { modelId, tgUserId, tgMessageId, emoji } = req.body || {};
   try {
-    const { modelId, tgUserId, tgMessageId, emoji } = req.body || {};
     const st = sessions.get(modelId);
     if (!st || st.status !== "connected") return res.status(409).json({ error: "modèle non connecté" });
+    const peer = await resolvePeer(st.client, tgUserId);
     await st.client.invoke(new Api.messages.SendReaction({
-      peer: tgUserId,
+      peer,
       msgId: parseInt(tgMessageId, 10),
       reaction: [new Api.ReactionEmoji({ emoticon: emoji || "❤️" })],
     }));
     res.json({ ok: true });
-  } catch (e) { res.status(500).json({ error: String(e?.message || e) }); }
+  } catch (e) {
+    const msg = String(e?.message || e);
+    if (isAuthError(msg)) { await markDead(modelId, msg); return res.status(409).json({ error: "Session Telegram expirée — reconnecte le modèle" }); }
+    res.status(500).json({ error: msg });
+  }
 });
 
 // Déconnexion
