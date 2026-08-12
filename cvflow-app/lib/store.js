@@ -5,12 +5,13 @@ import { supabase, supabaseReady } from "./supabaseClient";
 const WORKER = process.env.NEXT_PUBLIC_TG_WORKER_URL;
 const WORKER_KEY = process.env.NEXT_PUBLIC_TG_WORKER_KEY;
 async function workerSend(modelId, tgUserId, text, replyTo) {
-  if (!WORKER || !tgUserId) return null;
+  if (!WORKER || !tgUserId) return { ok: true, tgId: null };   // pas de worker/tg = mode cockpit, pas un échec
   try {
     const r = await fetch(WORKER + "/send", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, text, replyTo: replyTo || null }) });
+    if (!r.ok) { let e = {}; try { e = await r.json(); } catch (x) {} return { ok: false, error: e.error || ("Erreur " + r.status) }; }
     const d = await r.json();
-    return d && d.tgMessageId ? d.tgMessageId : null;
-  } catch (e) { return null; /* le message reste enregistré côté CRM même si l'envoi échoue */ }
+    return { ok: true, tgId: d && d.tgMessageId ? d.tgMessageId : null };
+  } catch (e) { return { ok: false, error: "Worker injoignable" }; }
 }
 async function workerDelete(modelId, tgUserId, tgMessageId) {
   if (!WORKER || !tgUserId || !tgMessageId) return;
@@ -140,13 +141,19 @@ export function StoreProvider({ children }) {
   }
   const sendMessage = useCallback(async (fanId, text, replyTo) => {
     const fan = convs.find((c) => c.id === fanId);
-    const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: fan?.model_id || activeModel, agency_id: profile.agency_id, sender_id: profile.id, direction: "out", kind: "text", body: text }).select().single();
-    setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), mapMsg(data)] }));
-    const tgId = await workerSend(fan?.model_id || activeModel, fan?.tgUserId, text, replyTo);   // envoi réel sur Telegram (+ réponse)
-    if (tgId && data) {
-      await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
-      setChats((prev) => ({ ...prev, [fanId]: (prev[fanId] || []).map((mm) => (mm.id === data.id ? { ...mm, tgId } : mm)) }));
+    const modelId = fan?.model_id || activeModel;
+    // Envoi réel d'abord (si compte Telegram relié) : si ça échoue, on n'enregistre RIEN → pas de message fantôme
+    let tgId = null;
+    if (WORKER && fan?.tgUserId) {
+      const res = await workerSend(modelId, fan.tgUserId, text, replyTo);
+      if (!res.ok) return { ok: false, error: res.error || "Envoi impossible (modèle déconnecté ou banni)" };
+      tgId = res.tgId;
     }
+    const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: modelId, agency_id: profile.agency_id, sender_id: profile.id, direction: "out", kind: "text", body: text }).select().single();
+    const msg = mapMsg(data); if (tgId) msg.tgId = tgId;
+    setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), msg] }));
+    if (tgId && data) await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
+    return { ok: true };
   }, [convs, activeModel, profile]);
 
   const reactMessage = useCallback(async (fanId, tgMessageId, emoji) => {

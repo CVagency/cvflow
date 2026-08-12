@@ -24,6 +24,15 @@ function workerFetch(path, opts = {}) {
   return fetch(WORKER + path, { ...opts, headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "", ...(opts.headers || {}) } });
 }
 
+const STATUS_UI = {
+  connected: ["● Telegram connecté", "text-acc"],
+  connecting: ["◐ Connexion en cours…", "text-gold"],
+  qr: ["◵ QR en attente de scan", "text-gold"],
+  error: ["✕ Déconnecté / banni", "text-danger"],
+  offline: ["○ Worker injoignable", "text-muted2"],
+  idle: ["○ Non connecté", "text-muted2"],
+};
+
 // QR décoratif (repli quand le worker n'est pas encore branché)
 function PlaceholderQR() {
   let cells = [];
@@ -46,9 +55,27 @@ export default function Models() {
   const [confirmDel, setConfirmDel] = useState(null);
   const [qrImg, setQrImg] = useState(null);
   const [error, setError] = useState("");
+  const [statusMap, setStatusMap] = useState({});
   const pollRef = useRef(null);
 
   useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); }, []);
+
+  // Statut de connexion en direct pour chaque modèle (interrogé au worker)
+  useEffect(() => {
+    if (!WORKER || !models.length) return;
+    let stop = false;
+    const poll = async () => {
+      const entries = await Promise.all(models.map(async (m) => {
+        try { const r = await workerFetch("/status/" + m.id); const d = await r.json(); return [m.id, d.status || "offline"]; }
+        catch (e) { return [m.id, "offline"]; }
+      }));
+      if (!stop) setStatusMap(Object.fromEntries(entries));
+    };
+    poll();
+    const t = setInterval(poll, 5000);
+    return () => { stop = true; clearInterval(t); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [models]);
 
   async function generate() {
     setBusy(true); setError(""); setQrImg(null);
@@ -101,7 +128,11 @@ export default function Models() {
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg" style={{ background: `linear-gradient(135deg,${m.color},${m.c2 || "#0d9488"})` }}>{m.name[0]}</div>
                 <div className="flex-1">
                   <div className="font-bold text-[15px]">{m.name}</div>
-                  <div className={`text-[12px] flex items-center gap-1.5 mt-0.5 ${m.tg ? "text-acc" : "text-muted2"}`}>{m.tg ? "● Telegram connecté" : "○ En attente de connexion"}</div>
+                  {(() => {
+                    const st = WORKER ? (statusMap[m.id] || "connecting") : (m.tg ? "connected" : "idle");
+                    const ui = STATUS_UI[st] || STATUS_UI.idle;
+                    return <div className={`text-[12px] flex items-center gap-1.5 mt-0.5 ${ui[1]}`}>{ui[0]}</div>;
+                  })()}
                 </div>
                 <button onClick={() => setConfirmDel(m)} className="w-8 h-8 rounded-lg bg-panel2 text-muted hover:text-danger flex items-center justify-center" title="Supprimer">🗑</button>
               </div>

@@ -20,6 +20,7 @@ export default function Conversations() {
   const [addFanOpen, setAddFanOpen] = useState(false);
   const [fanForm, setFanForm] = useState({ name: "", tag: "new" });
   const [replyTo, setReplyTo] = useState(null);
+  const [sendErr, setSendErr] = useState("");
   const msgsRef = useRef(null);
 
   const emojis = ["😍", "🔥", "😏", "🥰", "😘", "😉", "🙈", "💦", "😈", "🥺", "❤️", "💸", "👀", "😊"];
@@ -47,8 +48,14 @@ export default function Conversations() {
     return () => clearInterval(t);
   }, []);
 
-  function openConv(id) { setActiveConv(id); setVaultOpen(false); setReplyTo(null); s.markRead(id); if (!chats[id]) s.loadChat(id); }
-  function send() { if (!draft.trim() || !activeConv) return; s.sendMessage(activeConv, draft.trim(), replyTo?.tgId); setDraft(""); setShowScripts(false); setReplyTo(null); }
+  function openConv(id) { setActiveConv(id); setVaultOpen(false); setReplyTo(null); setSendErr(""); s.markRead(id); if (!chats[id]) s.loadChat(id); }
+  async function send() {
+    if (!draft.trim() || !activeConv) return;
+    setSendErr("");
+    const res = await s.sendMessage(activeConv, draft.trim(), replyTo?.tgId);
+    if (res && res.ok === false) { setSendErr(res.error || "Envoi impossible"); return; }   // garde le message dans la zone de saisie pour réessayer
+    setDraft(""); setShowScripts(false); setReplyTo(null);
+  }
   function onDraft(v) { setDraft(v); setShowScripts(v.startsWith("/")); }
   function pickScript(txt) { const t = txt.replace("(name)", conv?.name || ""); setDraft(t); setShowScripts(false); try { navigator.clipboard.writeText(t); } catch {} }
 
@@ -119,6 +126,11 @@ export default function Conversations() {
                       </div>
                     ))}
                     {(scripts[activeModel] || []).length === 0 && <div className="px-3 py-3 text-[12px] text-muted2">Aucun script — ajoute-en dans l'onglet Scripts.</div>}
+                  </div>
+                )}
+                {sendErr && (
+                  <div className="flex items-center gap-2 mb-2 bg-danger/15 border border-danger/30 text-danger rounded-lg px-2.5 py-2 text-[12.5px] font-semibold">
+                    ⚠️ {sendErr}<button onClick={() => setSendErr("")} className="ml-auto text-danger/70 hover:text-danger">✕</button>
                   </div>
                 )}
                 {replyTo && (
