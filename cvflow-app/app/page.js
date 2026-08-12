@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LandingShowcase from "@/components/LandingShowcase";
 
 export const metadata = {
   title: "CVFLOW — Le CRM de chatting Telegram pour agences",
@@ -67,39 +68,9 @@ export default function Landing() {
         </div>
         <div className="mt-5 text-[13px] text-muted2 flex items-center justify-center gap-2"><span className="inline-flex -space-x-1.5">{["#22c55e","#3aa0e6","#e5b769"].map((c)=><span key={c} className="w-5 h-5 rounded-full border-2 border-[#0a0d0c]" style={{background:c}} />)}</span>3 agences déjà en cours d'onboarding · paiement au résultat</div>
 
-        {/* Aperçu produit (mockup) */}
-        <div className="mt-16 relative">
-          <div className="absolute inset-x-10 -top-6 h-24 blur-3xl opacity-40" style={{ background: "radial-gradient(circle,#22c55e,transparent)" }} />
-          <div className="relative card p-2.5 shadow-2xl max-w-3xl mx-auto border-line2">
-            <div className="rounded-xl overflow-hidden border border-line" style={{ background: "#0e1312" }}>
-              <div className="flex items-center gap-1.5 px-3 py-2.5 border-b border-line">
-                <span className="w-2.5 h-2.5 rounded-full bg-[#ef5f5f]" /><span className="w-2.5 h-2.5 rounded-full bg-[#e5b769]" /><span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" />
-                <span className="text-[11px] text-muted2 ml-2">cvflow · conversations</span>
-              </div>
-              <div className="grid grid-cols-[150px_1fr_140px] h-[240px] text-left max-sm:grid-cols-1">
-                <div className="border-r border-line p-2.5 flex flex-col gap-2 max-sm:hidden">
-                  {[["Jérémie", "120€", "#22c55e"], ["Alex", "40€", "#e5b769"], ["Sam", "0€", "#5f6b66"]].map((f, i) => (
-                    <div key={i} className={`flex items-center gap-2 rounded-lg p-1.5 ${i === 0 ? "bg-panel2" : ""}`}>
-                      <span className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold text-white" style={{ background: f[2] }}>{f[0][0]}</span>
-                      <div className="min-w-0"><div className="text-[11px] font-semibold truncate">{f[0]}</div><div className="text-[10px] font-bold" style={{ color: f[2] }}>{f[1]}</div></div>
-                    </div>
-                  ))}
-                </div>
-                <div className="p-3 flex flex-col justify-end gap-2">
-                  <div className="self-start bg-panel border border-line rounded-2xl rounded-bl px-3 py-2 text-[11.5px] max-w-[80%]">Coucou, tu fais quoi ce soir ? 🙈</div>
-                  <div className="self-end rounded-2xl rounded-br px-3 py-2 text-[11.5px] max-w-[80%] text-[#eafff2]" style={{ background: "linear-gradient(135deg,#16a34a,#128a44)" }}>J'ai une petite surprise pour toi… 💦</div>
-                  <div className="self-end rounded-xl border border-gold/40 px-3 py-2 text-[11px] max-w-[80%]" style={{ background: "rgba(229,183,105,.08)" }}>🎬 Vidéo douche · <b className="text-gold">15€ · Dropp</b></div>
-                </div>
-                <div className="border-l border-line p-2.5 max-sm:hidden">
-                  <div className="text-[10px] text-muted2 uppercase mb-1">Fiche fan</div>
-                  <div className="text-[11px] font-bold">Jérémie</div>
-                  <div className="mt-1.5 badge text-gold bg-gold/15">VIP</div>
-                  <div className="mt-3 text-[10px] text-muted2 uppercase mb-1">Dépensé</div>
-                  <div className="text-acc font-extrabold text-lg">120€</div>
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* Aperçu produit — motion animé auto-rotatif */}
+        <div className="mt-16">
+          <LandingShowcase />
         </div>
       </section>
 
