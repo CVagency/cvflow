@@ -231,6 +231,12 @@ export function StoreProvider({ children }) {
     refresh();
   }, [refresh]);
 
+  // Clé API Dropp Fans par modèle (drp_live_…) — sert à récupérer prix/visuel + recevoir les paiements en webhook
+  const setDroppKey = useCallback(async (modelId, key) => {
+    await supabase.from("cvflow_models").update({ dropp_api_key: key || null }).eq("id", modelId);
+    refresh();
+  }, [refresh]);
+
   const addShift = useCallback(async ({ member_id, model_id, day, start_min, end_min, note }) => {
     await supabase.from("cvflow_shifts").insert({ agency_id: profile.agency_id, member_id, model_id: model_id || null, day, start_min, end_min, note: note || null });
     refresh();
@@ -323,7 +329,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, setDroppKey, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

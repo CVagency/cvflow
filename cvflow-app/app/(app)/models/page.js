@@ -45,8 +45,10 @@ function PlaceholderQR() {
 }
 
 export default function Models() {
-  const { models, convs, addModel, deleteModel, setActiveModel, setModelConnected } = useStore();
+  const { models, convs, addModel, deleteModel, setActiveModel, setModelConnected, setDroppKey } = useStore();
   const router = useRouter();
+  const [droppModal, setDroppModal] = useState(null); // modèle en cours d'édition de clé Dropp
+  const [droppInput, setDroppInput] = useState("");
   const [connect, setConnect] = useState(false);
   const [name, setName] = useState("");
   const [step, setStep] = useState("form");
@@ -146,7 +148,8 @@ export default function Models() {
                 {[[convs.filter((c) => c.model_id === m.id).length, "Fans"], [m.ppv || 0, "PPV"], ["€0", "CA"]].map((s, i) => <div key={i} className="bg-bg2 rounded-lg p-2.5 text-center"><div className="text-base font-extrabold">{s[0]}</div><div className="text-[10px] text-muted uppercase mt-0.5">{s[1]}</div></div>)}
               </div>
               <div className="flex gap-2 mb-3.5">
-                {[["Telegram", m.tg, "#3aa0e6"], ["Dropp", m.dropp, "#e5b769"]].map((c) => <div key={c[0]} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px]"><span className="w-2 h-2 rounded-full" style={{ background: c[1] ? "#22c55e" : "#5f6b66" }} /><span style={{ color: c[2] }}>{c[0]}</span></div>)}
+                <div className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px]"><span className="w-2 h-2 rounded-full" style={{ background: m.tg ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#3aa0e6" }}>Telegram</span></div>
+                <button onClick={() => { setDroppInput(""); setDroppModal(m); }} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px] hover:border-gold/50" title="Connecter la clé API Dropp Fans"><span className="w-2 h-2 rounded-full" style={{ background: m.dropp ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#e5b769" }}>Dropp {m.dropp ? "✓" : "＋"}</span></button>
               </div>
               {needsReconnect && <button onClick={() => reconnect(m)} className="w-full py-2 text-[12px] font-bold mb-2 rounded-[10px] text-white" style={{ background: "linear-gradient(135deg,#3aa0e6,#2a80c6)" }}>🔗 Reconnecter Telegram (scanner le QR)</button>}
               <div className="flex gap-2">
@@ -193,6 +196,30 @@ export default function Models() {
               {WORKER && <button onClick={closeConnect} className="btn-ghost w-full py-2.5 font-semibold mt-4">Fermer</button>}
             </div>}
             {step === "done" && <div className="text-center py-8 text-acc font-bold text-lg">✓ {name || "Modèle"} connecté à Telegram</div>}
+          </div>
+        </div>
+      )}
+
+      {droppModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setDroppModal(null); }}>
+          <div className="card p-6 w-[500px] max-w-[92vw]">
+            <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-extrabold">🟡 Connecter Dropp Fans · {droppModal.name}</h2><button onClick={() => setDroppModal(null)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
+            <div className="bg-bg2 border border-line rounded-xl p-3.5 mb-4 text-[12.5px] text-muted leading-relaxed">
+              <div className="font-semibold text-txt mb-1.5">Où trouver ta clé API Dropp :</div>
+              <ol className="list-decimal ml-4 flex flex-col gap-1">
+                <li>Connecte-toi sur <span className="text-gold">app.dropp.fans</span></li>
+                <li>Clique sur les <b className="text-txt">⋯ (3 points)</b> à côté du nom de ton agence → <b className="text-txt">Paramètres</b></li>
+                <li>Onglet <b className="text-txt">API</b> → bouton <b className="text-txt">Create Key</b></li>
+                <li>Coche les accès <span className="text-txt">content:read, orders:read, links:read, webhooks:read</span> puis crée la clé</li>
+                <li>Copie la clé <span className="font-mono text-gold">drp_live_…</span> et colle-la ci-dessous</li>
+              </ol>
+            </div>
+            <label className="text-xs text-muted font-semibold block mb-1.5">Clé API Dropp du modèle {droppModal.name}</label>
+            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppInput} onChange={(e) => setDroppInput(e.target.value)} placeholder="drp_live_…" />
+            <div className="flex gap-2.5">
+              <button onClick={() => setDroppModal(null)} className="btn-ghost flex-1 py-2.5 font-semibold">Annuler</button>
+              <button onClick={async () => { const id = droppModal.id; setDroppModal(null); await setDroppKey(id, droppInput.trim()); }} className="btn flex-1 py-2.5 font-bold">Enregistrer la clé</button>
+            </div>
           </div>
         </div>
       )}

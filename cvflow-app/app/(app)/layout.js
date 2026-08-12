@@ -4,6 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useStore, ROLE_VIEWS } from "@/lib/store";
 import { initials } from "@/lib/ui";
+import OnboardingGuide from "@/components/OnboardingGuide";
 
 const NAV = [
   { group: "Pilotage", items: [["dashboard", "Tableau de bord"], ["conversations", "Conversations"], ["analytics", "Analytics"], ["plannings", "Plannings"], ["scripts", "Scripts"]] },
@@ -68,6 +69,7 @@ export default function AppLayout({ children }) {
         <div className="h-[60px] min-h-[60px] border-b border-line flex items-center px-6 gap-3.5 bg-bg2">
           <div className="text-[17px] font-bold capitalize">{(pathname.slice(1) || "dashboard").replace("planning", "plannings")}</div>
           <div className="flex-1" />
+          {profile.role === "ADMIN" && <button onClick={() => window.dispatchEvent(new Event("cvflow-open-guide"))} className="text-[12.5px] font-semibold text-muted hover:text-acc border border-line hover:border-acc/50 rounded-full px-3 py-1.5 flex items-center gap-1.5" title="Revoir le guide de démarrage">🎓 Guide</button>}
           <div className="badge text-acc bg-acc/15 flex items-center gap-1.5 px-3 py-1.5"><span className="w-1.5 h-1.5 rounded-full bg-acc" /> Opérationnel</div>
           <div className="flex items-center gap-2 bg-panel border border-line2 pl-1 pr-3 py-1 rounded-full">
             <div className="w-7 h-7 rounded-full flex items-center justify-center font-bold text-[11px] text-white" style={{ background: "#0d9488" }}>{initials(profile.name || profile.email || "?")}</div>
@@ -76,6 +78,7 @@ export default function AppLayout({ children }) {
         </div>
         <div className="flex-1 overflow-y-auto">{children}</div>
       </div>
+      <OnboardingGuide />
     </div>
   );
 }
