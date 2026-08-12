@@ -85,9 +85,15 @@ export default function Models() {
     if (WORKER && id) startWorkerConnect(id);
   }
 
-  async function startWorkerConnect(id) {
+  // Reconnexion d'un modèle EXISTANT (ex: session tuée par Telegram) → force un QR neuf
+  function reconnect(m) {
+    setConnect(true); setStep("qr"); setName(m.name); setNewId(m.id); setQrImg(null); setError("");
+    if (WORKER) startWorkerConnect(m.id, true);
+  }
+
+  async function startWorkerConnect(id, fresh) {
     try {
-      await workerFetch("/connect", { method: "POST", body: JSON.stringify({ modelId: id }) });
+      await workerFetch("/connect", { method: "POST", body: JSON.stringify({ modelId: id, fresh: !!fresh }) });
     } catch (e) { setError("Worker injoignable. Vérifie qu'il tourne et que l'URL est correcte."); return; }
     let lastQr = "";
     pollRef.current = setInterval(async () => {
@@ -122,17 +128,17 @@ export default function Models() {
         <div className="h-[50vh] flex flex-col items-center justify-center text-center gap-2"><div className="text-4xl opacity-40">👤</div><div className="font-bold text-lg">Aucun modèle</div><div className="text-muted text-sm">Connecte un compte Telegram pour commencer.</div></div>
       ) : (
         <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fill,minmax(310px,1fr))" }}>
-          {models.map((m) => (
+          {models.map((m) => {
+            const st = WORKER ? (statusMap[m.id] || "connecting") : (m.tg ? "connected" : "idle");
+            const ui = STATUS_UI[st] || STATUS_UI.idle;
+            const needsReconnect = WORKER && st !== "connected";
+            return (
             <div key={m.id} className="card p-[18px]">
               <div className="flex items-center gap-3 mb-4">
                 <div className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-lg" style={{ background: `linear-gradient(135deg,${m.color},${m.c2 || "#0d9488"})` }}>{m.name[0]}</div>
                 <div className="flex-1">
                   <div className="font-bold text-[15px]">{m.name}</div>
-                  {(() => {
-                    const st = WORKER ? (statusMap[m.id] || "connecting") : (m.tg ? "connected" : "idle");
-                    const ui = STATUS_UI[st] || STATUS_UI.idle;
-                    return <div className={`text-[12px] flex items-center gap-1.5 mt-0.5 ${ui[1]}`}>{ui[0]}</div>;
-                  })()}
+                  <div className={`text-[12px] flex items-center gap-1.5 mt-0.5 ${ui[1]}`}>{ui[0]}</div>
                 </div>
                 <button onClick={() => setConfirmDel(m)} className="w-8 h-8 rounded-lg bg-panel2 text-muted hover:text-danger flex items-center justify-center" title="Supprimer">🗑</button>
               </div>
@@ -142,12 +148,14 @@ export default function Models() {
               <div className="flex gap-2 mb-3.5">
                 {[["Telegram", m.tg, "#3aa0e6"], ["Dropp", m.dropp, "#e5b769"]].map((c) => <div key={c[0]} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px]"><span className="w-2 h-2 rounded-full" style={{ background: c[1] ? "#22c55e" : "#5f6b66" }} /><span style={{ color: c[2] }}>{c[0]}</span></div>)}
               </div>
+              {needsReconnect && <button onClick={() => reconnect(m)} className="w-full py-2 text-[12px] font-bold mb-2 rounded-[10px] text-white" style={{ background: "linear-gradient(135deg,#3aa0e6,#2a80c6)" }}>🔗 Reconnecter Telegram (scanner le QR)</button>}
               <div className="flex gap-2">
                 <button onClick={() => router.push("/scripts")} className="btn-ghost flex-1 py-2 text-[12px] font-semibold">Scripts</button>
                 <button onClick={() => openVault(m.id)} className="btn flex-1 py-2 text-[12px] font-bold">Coffre →</button>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

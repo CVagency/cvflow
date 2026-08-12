@@ -171,8 +171,15 @@ app.get("/health", (_req, res) => res.json({ ok: true, models: [...sessions.keys
 // Démarre/retourne la connexion + le QR
 app.post("/connect", async (req, res) => {
   try {
-    const { modelId } = req.body || {};
+    const { modelId, fresh } = req.body || {};
     if (!modelId) return res.status(400).json({ error: "modelId requis" });
+    // « fresh » : on jette la session en cours (morte/dupliquée) pour forcer un QR neuf
+    if (fresh) {
+      const old = sessions.get(modelId);
+      if (old?.client) { try { await old.client.disconnect(); } catch (e) {} }
+      sessions.delete(modelId);
+      try { await supa.from("cvflow_models").update({ tg_session: null, tg_connected: false }).eq("id", modelId); } catch (e) {}
+    }
     const st = await connectModel(modelId);
     res.json({ status: st.status, qrUrl: st.qrUrl, error: st.error });
   } catch (e) { res.status(500).json({ error: String(e?.message || e) }); }
