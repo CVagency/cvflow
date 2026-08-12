@@ -198,7 +198,7 @@ app.post("/send", async (req, res) => {
   try {
     const st = sessions.get(modelId);
     if (!st || st.status !== "connected") return res.status(409).json({ error: "modèle non connecté" });
-    const opts = { message: text };
+    const opts = { message: text, linkPreview: false }; // pas d'aperçu moche Dropp
     if (replyTo) opts.replyTo = parseInt(replyTo, 10);
     const peer = await resolvePeer(st.client, tgUserId);
     const sent = await st.client.sendMessage(peer, opts);

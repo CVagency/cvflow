@@ -215,8 +215,8 @@ function Bubble({ m, team, onPaid, onLike, onReply, onDelete }) {
           <div className="flex-1 min-w-0">
             <div className="font-bold text-[13px]">{m.name}</div>
             <div className="text-gold font-extrabold text-sm mt-0.5">{m.price > 0 ? m.price + "€ · Dropp" : "Gratuit"}</div>
-            <div className="text-[10.5px] text-muted mt-0.5">{m.unlocked ? <span className="text-acc font-bold">payé ✓</span> : "en attente"}{by ? ` · ${by.name?.split(" ")[0]}` : ""}</div>
-            {!m.unlocked && m.price > 0 && <button onClick={onPaid} className="mt-1.5 text-[11px] font-bold text-acc border border-acc/40 rounded-md px-2 py-0.5 hover:bg-acc/10">Marquer payé (test)</button>}
+            <div className="text-[10.5px] text-muted mt-0.5">{m.price > 0 ? (m.unlocked ? <span className="text-acc font-bold">payé ✓</span> : <span className="text-gold">en attente de paiement</span>) : <span className="text-acc font-bold">🎁 offert</span>}{by ? ` · ${by.name?.split(" ")[0]}` : ""}</div>
+            {!m.unlocked && m.price > 0 && <button onClick={onPaid} className="mt-1.5 text-[11px] font-bold text-acc border border-acc/40 rounded-md px-2 py-0.5 hover:bg-acc/10">✓ Marquer encaissé</button>}
           </div>
         </div>
         <div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
@@ -277,7 +277,7 @@ function FanInfo({ conv, chats, store }) {
           <div key={i} className="flex items-center gap-2 py-1.5 text-[12px] border-b border-line/40 last:border-0">
             <span className="truncate flex-1">{typeIcons(p.type)} {p.name}</span>
             <span className="text-gold font-bold shrink-0">{p.price > 0 ? p.price + "€" : "gratuit"}</span>
-            <span className={`shrink-0 text-[11px] ${p.unlocked ? "text-acc font-bold" : "text-muted2"}`}>{p.unlocked ? "acheté ✓" : "non acheté"}</span>
+            <span className={`shrink-0 text-[11px] ${p.price > 0 && p.unlocked ? "text-acc font-bold" : "text-muted2"}`}>{p.price > 0 ? (p.unlocked ? "acheté ✓" : "non acheté") : "offert"}</span>
           </div>
         ))}
       </Section>
