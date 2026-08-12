@@ -5,8 +5,10 @@ export function typeList(type) { return String(type || "photo").split(",").map((
 export function typeIcons(type) { return typeList(type).map((t) => TYPE_ICON[t] || "📎").join(" "); }
 export function typeLabel(type) { return typeList(type).map((t) => TYPE_LABEL[t] || t).join(" + "); }
 export const TAG_CLASS = {
-  vip: "text-gold bg-gold/15", whale: "text-purple bg-purple/15", new: "text-acc bg-acc/15", cold: "text-muted bg-muted/15",
+  vip: "text-gold bg-gold/15", whale: "text-purple bg-purple/15", new: "text-acc bg-acc/15", cold: "text-muted bg-muted/15", tw: "text-danger bg-danger/15",
 };
+export const TAG_LABEL = { new: "New", vip: "VIP", whale: "Baleine", tw: "Time waster", cold: "Froid" };
+export const TAGS = [["new", "New"], ["vip", "VIP"], ["whale", "Baleine 🐋"], ["tw", "Time waster ⏳"], ["cold", "Froid"]];
 export function initials(n) { return n.split(" ").map((w) => w[0]).slice(0, 2).join("").toUpperCase(); }
 export function eur(n) { return "€" + Number(n).toLocaleString("fr-FR"); }
 function hash(s) { let h = 0; for (let i = 0; i < s.length; i++) { h = (h << 5) - h + s.charCodeAt(i); h |= 0; } return h; }

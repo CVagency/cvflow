@@ -4,11 +4,17 @@ import { supabase, supabaseReady } from "./supabaseClient";
 
 const WORKER = process.env.NEXT_PUBLIC_TG_WORKER_URL;
 const WORKER_KEY = process.env.NEXT_PUBLIC_TG_WORKER_KEY;
-async function workerSend(modelId, tgUserId, text) {
+async function workerSend(modelId, tgUserId, text, replyTo) {
   if (!WORKER || !tgUserId) return;
   try {
-    await fetch(WORKER + "/send", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, text }) });
+    await fetch(WORKER + "/send", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, text, replyTo: replyTo || null }) });
   } catch (e) { /* le message reste enregistré côté CRM même si l'envoi échoue */ }
+}
+async function workerReact(modelId, tgUserId, tgMessageId, emoji) {
+  if (!WORKER || !tgUserId || !tgMessageId) return;
+  try {
+    await fetch(WORKER + "/react", { method: "POST", headers: { "content-type": "application/json", "x-api-key": WORKER_KEY || "" }, body: JSON.stringify({ modelId, tgUserId, tgMessageId, emoji: emoji || "❤️" }) });
+  } catch (e) { /* no-op */ }
 }
 
 const StoreCtx = createContext(null);
@@ -122,14 +128,24 @@ export function StoreProvider({ children }) {
   }, []);
   function mapMsg(m) {
     if (m.kind === "ppv") return { t: "ppv", id: m.id, name: m.body, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, folder: "", lvl: "", type: "photo", time: timeOf(m.created_at) };
-    return { t: m.direction === "in" ? "in" : "out", x: m.body, by: m.sender_id, time: timeOf(m.created_at) };
+    return { t: m.direction === "in" ? "in" : "out", id: m.id, tgId: m.tg_message_id, x: m.body, by: m.sender_id, time: timeOf(m.created_at) };
   }
-  const sendMessage = useCallback(async (fanId, text) => {
+  const sendMessage = useCallback(async (fanId, text, replyTo) => {
     const fan = convs.find((c) => c.id === fanId);
     const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: fan?.model_id || activeModel, agency_id: profile.agency_id, sender_id: profile.id, direction: "out", kind: "text", body: text }).select().single();
     setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), mapMsg(data)] }));
-    workerSend(fan?.model_id || activeModel, fan?.tgUserId, text);   // envoi réel sur Telegram
+    workerSend(fan?.model_id || activeModel, fan?.tgUserId, text, replyTo);   // envoi réel sur Telegram (+ réponse à un message)
   }, [convs, activeModel, profile]);
+
+  const reactMessage = useCallback(async (fanId, tgMessageId, emoji) => {
+    const fan = convs.find((c) => c.id === fanId);
+    workerReact(fan?.model_id || activeModel, fan?.tgUserId, tgMessageId, emoji || "❤️");
+  }, [convs, activeModel]);
+
+  const setFanTag = useCallback(async (fanId, tag) => {
+    setConvs((prev) => prev.map((c) => (c.id === fanId ? { ...c, tag } : c)));
+    await supabase.from("cvflow_fans").update({ tag }).eq("id", fanId);
+  }, []);
 
   const sendVaultItem = useCallback(async (fanId, modelId, folderIdx, itemIdx) => {
     const it = vault[modelId][folderIdx].items[itemIdx];
@@ -262,7 +278,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, reactMessage, setFanTag, sendVaultItem, markPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

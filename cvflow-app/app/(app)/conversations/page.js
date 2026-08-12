@@ -1,7 +1,7 @@
 "use client";
 import { useState, useRef, useEffect } from "react";
 import { useStore } from "@/lib/store";
-import { initials, eur, thumbBg, typeIcons, typeLabel, TAG_CLASS } from "@/lib/ui";
+import { initials, eur, thumbBg, typeIcons, typeLabel, TAG_CLASS, TAGS } from "@/lib/ui";
 import ModelSwitcher from "@/components/ModelSwitcher";
 import CopyLink from "@/components/CopyLink";
 
@@ -17,8 +17,7 @@ export default function Conversations() {
   const [showScripts, setShowScripts] = useState(false);
   const [addFanOpen, setAddFanOpen] = useState(false);
   const [fanForm, setFanForm] = useState({ name: "", tag: "new" });
-  const [saleOpen, setSaleOpen] = useState(false);
-  const [saleForm, setSaleForm] = useState({ model_id: "", amount: "", fan_id: "" });
+  const [replyTo, setReplyTo] = useState(null);
   const msgsRef = useRef(null);
 
   const emojis = ["😍", "🔥", "😏", "🥰", "😘", "😉", "🙈", "💦", "😈", "🥺", "❤️", "💸", "👀", "😊"];
@@ -46,8 +45,8 @@ export default function Conversations() {
     return () => clearInterval(t);
   }, []);
 
-  function openConv(id) { setActiveConv(id); setVaultOpen(false); s.markRead(id); if (!chats[id]) s.loadChat(id); }
-  function send() { if (!draft.trim() || !activeConv) return; s.sendMessage(activeConv, draft.trim()); setDraft(""); setShowScripts(false); }
+  function openConv(id) { setActiveConv(id); setVaultOpen(false); setReplyTo(null); s.markRead(id); if (!chats[id]) s.loadChat(id); }
+  function send() { if (!draft.trim() || !activeConv) return; s.sendMessage(activeConv, draft.trim(), replyTo?.tgId); setDraft(""); setShowScripts(false); setReplyTo(null); }
   function onDraft(v) { setDraft(v); setShowScripts(v.startsWith("/")); }
   function pickScript(txt) { const t = txt.replace("(name)", conv?.name || ""); setDraft(t); setShowScripts(false); try { navigator.clipboard.writeText(t); } catch {} }
 
@@ -61,7 +60,6 @@ export default function Conversations() {
       <div className="flex gap-2 px-4 py-3 border-b border-line bg-bg2 items-center">
         <ModelSwitcher onChange={() => { setActiveConv(null); setVaultOpen(false); }} />
         <div className="flex-1" />
-        <button onClick={() => { setSaleForm({ model_id: activeModel || models[0]?.id || "", amount: "", fan_id: activeConv || "" }); setSaleOpen(true); }} className="btn px-3 py-1.5 text-[12.5px] font-bold">＋ Vente encaissée</button>
         <div className="badge text-muted bg-panel border border-line px-3 py-1.5 text-[11.5px] flex items-center gap-1.5"><span className="text-tg">✈️ Telegram</span></div>
       </div>
       <div className="flex-1 flex min-h-0">
@@ -106,7 +104,7 @@ export default function Conversations() {
               </div>
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-[22px] flex flex-col gap-2.5">
                 {msgs.length === 0 && <div className="self-center text-muted2 text-[12.5px] mt-6">Démarre la conversation ci-dessous.</div>}
-                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} />)}
+                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} />)}
               </div>
               <div className="border-t border-line px-3.5 py-2.5 bg-bg2 relative">
                 {showScripts && (
@@ -119,6 +117,12 @@ export default function Conversations() {
                       </div>
                     ))}
                     {(scripts[activeModel] || []).length === 0 && <div className="px-3 py-3 text-[12px] text-muted2">Aucun script — ajoute-en dans l'onglet Scripts.</div>}
+                  </div>
+                )}
+                {replyTo && (
+                  <div className="flex items-center gap-2 mb-2 bg-panel2 border-l-2 border-acc rounded px-2.5 py-1.5 text-[12px]">
+                    <span className="text-muted truncate">↩ Réponse à : <span className="text-txt">{(replyTo.x || replyTo.name || "média").slice(0, 60)}</span></span>
+                    <button onClick={() => setReplyTo(null)} className="ml-auto text-muted2 hover:text-danger shrink-0">✕</button>
                   </div>
                 )}
                 <div className="flex gap-0.5 mb-2 flex-wrap items-center">
@@ -171,21 +175,6 @@ export default function Conversations() {
         </div>
       )}
 
-      {saleOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setSaleOpen(false); }}>
-          <div className="card p-6 w-[440px] max-w-[92vw]">
-            <div className="flex items-center justify-between mb-4"><h2 className="text-lg font-extrabold">Enregistrer une vente</h2><button onClick={() => setSaleOpen(false)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
-            <label className="text-xs text-muted font-semibold block mb-1.5">Modèle</label>
-            <select className="inp w-full px-3 py-2.5 mb-3" value={saleForm.model_id} onChange={(e) => setSaleForm({ ...saleForm, model_id: e.target.value })}>{models.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select>
-            <label className="text-xs text-muted font-semibold block mb-1.5">Montant encaissé (€)</label>
-            <input type="number" className="inp w-full px-3 py-2.5 mb-3" value={saleForm.amount} onChange={(e) => setSaleForm({ ...saleForm, amount: e.target.value })} placeholder="Ex: 25" autoFocus />
-            <label className="text-xs text-muted font-semibold block mb-1.5">Fan (optionnel)</label>
-            <select className="inp w-full px-3 py-2.5 mb-3" value={saleForm.fan_id} onChange={(e) => setSaleForm({ ...saleForm, fan_id: e.target.value })}><option value="">— Aucun —</option>{modelConvs.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
-            <div className="text-[12px] text-muted mb-4 bg-bg2 rounded-lg px-3 py-2">Créditée à toi : <b className="text-txt">{team.find((t) => t.id === currentUser)?.name?.split(" ")[0] || "toi"}</b> · elle apparaît dans Analytics, Dashboard et tes commissions.</div>
-            <button onClick={async () => { if (!saleForm.amount) return; await s.logSale({ model_id: saleForm.model_id, amount: saleForm.amount, fan_id: saleForm.fan_id || null }); setSaleOpen(false); }} className="btn w-full py-2.5 font-bold">Enregistrer la vente</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -194,7 +183,7 @@ function Empty({ title, sub }) {
   return <div className="h-full flex flex-col items-center justify-center text-center gap-2 p-8"><div className="text-4xl opacity-40">🗂️</div><div className="font-bold text-lg">{title}</div><div className="text-muted text-sm max-w-sm">{sub}</div></div>;
 }
 
-function Bubble({ m, team, onPaid }) {
+function Bubble({ m, team, onPaid, onLike, onReply }) {
   if (m.t === "ppv") {
     const by = m.by ? team.find((t) => t.id === m.by) : null;
     return (
@@ -215,9 +204,26 @@ function Bubble({ m, team, onPaid }) {
     );
   }
   const out = m.t === "out";
+  const by = m.by ? team.find((t) => t.id === m.by) : null;
+  if (out) {
+    return (
+      <div className="self-end max-w-[56%] flex flex-col items-end">
+        <div className="px-3.5 py-2.5 rounded-2xl rounded-br text-[13.5px] leading-relaxed text-[#eafff2]" style={{ background: "linear-gradient(135deg,#16a34a,#128a44)" }}>
+          {m.x}<div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
+        </div>
+        {by && <div className="text-[10px] text-muted2 mt-0.5 mr-1">envoyé par <b className="text-muted">{by.name?.split(" ")[0]}</b></div>}
+      </div>
+    );
+  }
   return (
-    <div className={`max-w-[56%] px-3.5 py-2.5 rounded-2xl text-[13.5px] leading-relaxed ${out ? "self-end text-[#eafff2] rounded-br" : "self-start bg-panel border border-line rounded-bl"}`} style={out ? { background: "linear-gradient(135deg,#16a34a,#128a44)" } : {}}>
-      {m.x}<div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
+    <div className="self-start max-w-[60%] group flex items-end gap-1.5">
+      <div className="px-3.5 py-2.5 rounded-2xl rounded-bl text-[13.5px] leading-relaxed bg-panel border border-line">
+        {m.x}<div className="text-[10px] opacity-60 mt-1 text-right">{m.time}</div>
+      </div>
+      <div className="flex flex-col gap-1 opacity-0 group-hover:opacity-100 transition shrink-0">
+        <button onClick={onLike} title="J'aime (réaction Telegram)" className="w-6 h-6 rounded-full bg-panel2 text-[11px] hover:bg-acc/20 flex items-center justify-center">❤️</button>
+        <button onClick={onReply} title="Répondre à ce message" className="w-6 h-6 rounded-full bg-panel2 text-[12px] text-muted hover:bg-acc/20 hover:text-acc flex items-center justify-center">↩</button>
+      </div>
     </div>
   );
 }
@@ -232,12 +238,21 @@ function FanInfo({ conv, chats, store }) {
         <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2.5" style={{ background: conv.color }}>{initials(conv.name)}</div>
         <div className="font-bold text-base">{conv.name}</div>
         <div className="text-[12px] text-muted mt-0.5">✈️ Telegram</div>
-        <div className="mt-2.5"><span className={`badge ${TAG_CLASS[conv.tag]}`}>{conv.tag.toUpperCase()}</span></div>
+        <div className="mt-3"><span className="text-[10px] text-muted2 uppercase tracking-wide block mb-1">Catégorie</span><select value={conv.tag} onChange={(e) => store.setFanTag(conv.id, e.target.value)} className="inp px-2.5 py-1.5 text-[12.5px] font-semibold w-full">{TAGS.map((t) => <option key={t[0]} value={t[0]}>{t[1]}</option>)}</select></div>
       </div>
       <Section title="💸 Dépenses & achats">
         <Row k="Total dépensé" v={eur(conv.spent)} acc />
         <Row k="PPV envoyés" v={ppv.length} />
-        <Row k="PPV déverrouillés" v={unlocked} acc />
+        <Row k="PPV achetés" v={unlocked} acc />
+      </Section>
+      <Section title="🎬 PPV envoyés">
+        {ppv.length === 0 ? <div className="text-muted2 text-[12px] py-1">Aucun PPV envoyé à ce fan.</div> : ppv.slice().reverse().map((p, i) => (
+          <div key={i} className="flex items-center gap-2 py-1.5 text-[12px] border-b border-line/40 last:border-0">
+            <span className="truncate flex-1">{typeIcons(p.type)} {p.name}</span>
+            <span className="text-gold font-bold shrink-0">{p.price > 0 ? p.price + "€" : "gratuit"}</span>
+            <span className={`shrink-0 text-[11px] ${p.unlocked ? "text-acc font-bold" : "text-muted2"}`}>{p.unlocked ? "acheté ✓" : "non acheté"}</span>
+          </div>
+        ))}
       </Section>
       <Section title="👤 Fiche fan">
         {fields.map((f) => (
