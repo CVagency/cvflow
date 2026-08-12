@@ -91,8 +91,8 @@ export default function Conversations() {
                   <div className="absolute -bottom-0.5 -right-0.5 w-[15px] h-[15px] rounded-full border-2 border-bg2 flex items-center justify-center text-[8px]" style={{ background: "#3aa0e6" }}>✈️</div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center gap-2"><span className="font-semibold text-[13.5px] truncate">{c.name}</span><span className="text-[12.5px] font-extrabold shrink-0" style={{ color: spentColor(c.spent) }}>{eur(c.spent)}</span></div>
-                  <div className="mt-1"><span className={`badge ${TAG_CLASS[c.tag]}`}>{(TAG_LABEL[c.tag] || c.tag).toUpperCase()}</span></div>
+                  <div className="flex justify-between items-center gap-2"><span className={`text-[13.5px] truncate ${c.unread > 0 ? "font-extrabold text-txt" : "font-semibold"}`}>{c.name}</span><span className="text-[12.5px] font-extrabold shrink-0" style={{ color: spentColor(c.spent) }}>{eur(c.spent)}</span></div>
+                  <div className="mt-1 flex items-center gap-1.5"><span className={`badge ${TAG_CLASS[c.tag]}`}>{(TAG_LABEL[c.tag] || c.tag).toUpperCase()}</span>{c.unread > 0 && <span className="badge bg-acc text-[#05130c] font-extrabold px-1.5 min-w-[18px] text-center">{c.unread}</span>}</div>
                 </div>
               </div>
             ))}
@@ -164,7 +164,10 @@ export default function Conversations() {
                         <span className="absolute top-1 left-1 bg-black/60 text-white text-[9px] font-bold px-1.5 rounded">Lvl {it.lvl}</span>{typeIcons(it.type)}
                       </div>
                       <div className="flex-1 min-w-0"><div className="font-bold text-[13px]">{it.name}</div><div className="text-[11px] text-muted mt-0.5">{typeIcons(it.type)} {typeLabel(it.type)} · {it.free ? <span className="text-acc font-bold">Gratuit</span> : <span className="text-gold font-extrabold">{it.price}€</span>}</div></div>
-                      <CopyLink text={it.link} className="btn text-[12px] px-2.5 py-1.5 font-bold whitespace-nowrap" />
+                      <div className="flex flex-col gap-1 shrink-0">
+                        <button onClick={async () => { setSendErr(""); const r = await s.sendVaultItem(activeConv, activeModel, fi, idx); if (r && r.ok === false) { setSendErr(r.error || "Envoi impossible"); return; } setVaultOpen(false); }} className="btn text-[12px] px-3 py-1.5 font-bold whitespace-nowrap">Envoyer</button>
+                        <CopyLink text={it.link} label="Copier lien" className="btn-ghost text-[10.5px] px-2 py-1 whitespace-nowrap text-muted" />
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -173,7 +176,7 @@ export default function Conversations() {
           )}
         </div>
 
-        {conv && <FanInfo conv={conv} chats={chats} store={s} />}
+        {conv && <FanInfo key={conv.id} conv={conv} chats={chats} store={s} />}
       </div>
 
       {addFanOpen && (

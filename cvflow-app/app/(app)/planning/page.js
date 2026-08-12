@@ -10,8 +10,11 @@ const toMin = (str) => { const [h, m] = String(str).split(":").map(Number); retu
 const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 
 export default function Planning() {
-  const { team, models, shifts, addShift, removeShift, profile } = useStore();
+  const { team, models, shifts, addShift, removeShift, profile, currentUser } = useStore();
   const isAdmin = profile?.role === "ADMIN";
+  // Un chatteur ne voit QUE son propre planning et SA propre rémunération (jamais celle des autres)
+  const visShifts = isAdmin ? shifts : shifts.filter((s) => s.member_id === currentUser);
+  const visTeam = isAdmin ? team : team.filter((t) => t.id === currentUser);
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [modal, setModal] = useState(null); // {dateStr}
@@ -24,7 +27,7 @@ export default function Planning() {
   const weekIso = weekDates.map(iso);
   const todayIso = iso(new Date());
 
-  const weekShifts = shifts.filter((s) => weekIso.includes(s.day));
+  const weekShifts = visShifts.filter((s) => weekIso.includes(s.day));
   const shiftsFor = (dateStr) => weekShifts.filter((s) => s.day === dateStr).sort((a, b) => a.start_min - b.start_min);
   const memberName = (id) => team.find((t) => t.id === id)?.name || "—";
   const memberColor = (id) => team.find((t) => t.id === id)?.color || "#0d9488";
@@ -88,15 +91,15 @@ export default function Planning() {
           <div className="grid grid-cols-3 gap-4 mb-4 max-sm:grid-cols-1">
             <Kpi label="Heures planifiées" value={(Math.round(totalHours * 10) / 10) + " h"} sub={label.toLowerCase()} />
             <Kpi label="Créneaux" value={weekShifts.length} />
-            <Kpi label="Membres planifiés" value={new Set(weekShifts.map((s) => s.member_id)).size + "/" + team.length} />
+            <Kpi label={isAdmin ? "Membres planifiés" : "Mes créneaux"} value={isAdmin ? new Set(weekShifts.map((s) => s.member_id)).size + "/" + team.length : weekShifts.length} />
           </div>
 
           <div className="card p-[18px]">
-            <h3 className="text-[13px] font-semibold text-muted mb-3.5">Récap par chatteur</h3>
+            <h3 className="text-[13px] font-semibold text-muted mb-3.5">{isAdmin ? "Récap par chatteur" : "Ma rémunération"}</h3>
             <table className="w-full">
               <thead><tr className="text-left text-[11px] uppercase tracking-wide text-muted2">{["Chatteur", "Heures", "Ventes", "CA généré", "%", "Sa part"].map((h, i) => <th key={h} className={`py-2.5 px-3.5 border-b border-line font-semibold ${i === 5 ? "text-right" : ""}`}>{h}</th>)}</tr></thead>
               <tbody>
-                {team.map((r) => {
+                {visTeam.map((r) => {
                   const h = Math.round(hoursOf(r.id) * 10) / 10;
                   return (
                     <tr key={r.id} className="hover:bg-panel2">

@@ -18,6 +18,18 @@ export default function AppLayout({ children }) {
 
   useEffect(() => { if (ready && !loading && !session) router.replace("/login"); }, [ready, loading, session, router]);
 
+  // Garde d'accès par rôle : un chatteur qui tape /analytics dans l'URL est renvoyé vers une page autorisée
+  useEffect(() => {
+    if (!ready || loading || !session || !profile) return;
+    const seg = (pathname || "/").replace(/^\//, "").split("/")[0];
+    const view = seg === "planning" ? "plannings" : seg;
+    const allowed = ROLE_VIEWS[profile.role] || [];
+    if (view && !allowed.includes(view)) {
+      const first = allowed[0] || "conversations";
+      router.replace("/" + (PATH[first] || first));
+    }
+  }, [ready, loading, session, profile, pathname, router]);
+
   if (!ready) return <Centered>Base de données non configurée.</Centered>;
   if (loading) return <Centered>Chargement…</Centered>;
   if (!session || !profile) return null;

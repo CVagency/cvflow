@@ -91,12 +91,18 @@ export function StoreProvider({ children }) {
 
     const modelIds = ms.map((m) => m.id);
     if (modelIds.length) {
-      const [foldersRes, scriptsRes, fansRes, salesRes] = await Promise.all([
+      const [foldersRes, scriptsRes, fansRes, salesRes, inRes] = await Promise.all([
         supabase.from("cvflow_vault_folders").select("*, cvflow_vault_items(*)").in("model_id", modelIds).order("position"),
         supabase.from("cvflow_scripts").select("*").in("model_id", modelIds),
         supabase.from("cvflow_fans").select("*").eq("agency_id", agencyId).order("created_at", { ascending: false }),
         supabase.from("cvflow_sales").select("*").eq("agency_id", agencyId),
+        supabase.from("cvflow_messages").select("fan_id, created_at").eq("agency_id", agencyId).eq("direction", "in"),
       ]);
+      // Messages non lus : on compare la date du dernier message entrant avec la dernière lecture (stockée localement)
+      let lastRead = {};
+      try { lastRead = JSON.parse((typeof window !== "undefined" && localStorage.getItem("cvflow_lastRead")) || "{}"); } catch (e) { lastRead = {}; }
+      const unreadByFan = {};
+      (inRes.data || []).forEach((m) => { const t = new Date(m.created_at).getTime(); if (t > (lastRead[m.fan_id] || 0)) unreadByFan[m.fan_id] = (unreadByFan[m.fan_id] || 0) + 1; });
       const vaultByModel = {};
       (foldersRes.data || []).forEach((f) => {
         (vaultByModel[f.model_id] = vaultByModel[f.model_id] || []).push({
@@ -108,7 +114,7 @@ export function StoreProvider({ children }) {
       const sc = {};
       (scriptsRes.data || []).forEach((s) => { (sc[s.model_id] = sc[s.model_id] || []).push([s.command, s.title, s.body]); });
       setScripts(sc);
-      setConvs((fansRes.data || []).map((f) => ({ id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: "", unread: 0, tag: f.tag, spent: Number(f.spent), src: f.source, tgUserId: f.tg_user_id, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" })));
+      setConvs((fansRes.data || []).map((f) => ({ id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: "", unread: unreadByFan[f.id] || 0, tag: f.tag, spent: Number(f.spent), src: f.source, tgUserId: f.tg_user_id, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" })));
       setSalesLog((salesRes.data || []).map((s) => ({ user: s.member_id, model: s.model_id, price: Number(s.amount), date: s.created_at })));
       // reflect sales into team ca
       setTeam((prev) => prev.map((u) => { const ca = (salesRes.data || []).filter((s) => s.member_id === u.id).reduce((a, s) => a + Number(s.amount), 0); return { ...u, ca, sales: (salesRes.data || []).filter((s) => s.member_id === u.id).length }; }));
@@ -175,12 +181,22 @@ export function StoreProvider({ children }) {
 
   const sendVaultItem = useCallback(async (fanId, modelId, folderIdx, itemIdx) => {
     const it = vault[modelId][folderIdx].items[itemIdx];
+    const fan = convs.find((c) => c.id === fanId);
+    // Envoi réel du lien Dropp au fan (en texte) si le compte Telegram est relié : si ça échoue, on n'enregistre RIEN
+    let tgId = null;
+    if (WORKER && fan?.tgUserId && it.link) {
+      const caption = it.free ? `🎁 ${it.name}\n${it.link}` : `🔥 ${it.name} — ${it.price}€\n👉 ${it.link}`;
+      const res = await workerSend(modelId, fan.tgUserId, caption);
+      if (!res.ok) return { ok: false, error: res.error || "Envoi impossible (modèle déconnecté ou banni)" };
+      tgId = res.tgId;
+    }
     const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: modelId, agency_id: profile.agency_id, sender_id: profile.id, kind: "ppv", body: it.name, vault_item_id: it.id, price: it.free ? 0 : it.price, unlocked: !!it.free }).select().single();
-    const msg = mapMsg(data); msg.folder = vault[modelId][folderIdx].folder; msg.lvl = it.lvl; msg.type = it.type;
+    const msg = mapMsg(data); msg.folder = vault[modelId][folderIdx].folder; msg.lvl = it.lvl; msg.type = it.type; if (tgId) msg.tgId = tgId;
     setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), msg] }));
+    if (tgId && data) await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
     // NOTE: le déverrouillage réel viendra du webhook Dropp (Phase 3). Bouton manuel de test ci-dessous.
-    return data.id;
-  }, [vault, profile]);
+    return { ok: true, id: data ? data.id : null };
+  }, [vault, profile, convs]);
 
   // Marque un PPV payé + crédite le chatteur (déclenché par le webhook Dropp en prod, ou manuellement ici)
   const markPaid = useCallback(async (messageId, fanId) => {
@@ -298,7 +314,10 @@ export function StoreProvider({ children }) {
     setConvs((prev) => prev.map((c) => (c.id === fanId ? { ...c, notes: val } : c)));
     await supabase.from("cvflow_fans").update({ notes: val }).eq("id", fanId);
   }, []);
-  const markRead = useCallback((fanId) => { setConvs((prev) => prev.map((c) => (c.id === fanId ? { ...c, unread: 0 } : c))); }, []);
+  const markRead = useCallback((fanId) => {
+    try { const lr = JSON.parse(localStorage.getItem("cvflow_lastRead") || "{}"); lr[fanId] = Date.now(); localStorage.setItem("cvflow_lastRead", JSON.stringify(lr)); } catch (e) { /* no-op */ }
+    setConvs((prev) => prev.map((c) => (c.id === fanId ? { ...c, unread: 0 } : c)));
+  }, []);
 
   const value = {
     ready, loading, auth, profile, session, currentUser,
