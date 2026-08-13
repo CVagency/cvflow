@@ -281,6 +281,8 @@ export function StoreProvider({ children }) {
     if (sale) await supabase.from("cvflow_sales").delete().eq("id", sale.id);
     const fan = convs.find((c) => c.id === fanId);
     if (fan) await supabase.from("cvflow_fans").update({ spent: Math.max(0, Number(fan.spent) - Number(msg.price)) }).eq("id", fanId);
+    // Pour un pourboire, on remet le montant à 0 : la demande repart proprement "en attente" (montant libre)
+    if (msg.kind === "tip") await supabase.from("cvflow_messages").update({ price: 0 }).eq("id", messageId);
     loadChat(fanId); refresh();
   }, [convs, loadChat, refresh]);
 

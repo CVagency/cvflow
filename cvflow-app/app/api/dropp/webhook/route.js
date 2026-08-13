@@ -43,6 +43,9 @@ export async function POST(req) {
   const isTip = msg.kind === "tip";
   // PPV = prix fixe du média ; pourboire = montant libre choisi par le fan
   const amount = isTip ? paid : (Number(msg.price) || paid);
+  // Garde-fou : si le montant d'un pourboire est introuvable dans le payload, on NE marque PAS payé
+  // (sinon encaissé à 0 € sans rattrapage). On laisse "en attente" → le chatteur pourra faire "✓ reçu".
+  if (isTip && amount <= 0) return json({ ok: true, tip_zero: true, note: "montant introuvable, laissé en attente" });
   await admin.from("cvflow_messages").update(isTip ? { unlocked: true, price: amount } : { unlocked: true }).eq("id", messageId);
   await admin.from("cvflow_sales").insert({ agency_id: msg.agency_id, model_id: msg.model_id, fan_id: msg.fan_id, member_id: msg.sender_id, amount });
   const { data: fan } = await admin.from("cvflow_fans").select("spent").eq("id", msg.fan_id).maybeSingle();
