@@ -229,14 +229,18 @@ export function StoreProvider({ children }) {
     // 1) enregistre la demande (kind=tip, montant 0 tant que non payé)
     const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: modelId, agency_id: profile.agency_id, sender_id: profile.id, kind: "tip", body: "Pourboire", price: 0, unlocked: false }).select().single();
     if (!data) return { ok: false, error: "Erreur d'enregistrement" };
-    // 2) copie trackée Dropp (metadata {message_id, fan_id, type:tip}) → paiement remonté par webhook
+    // 2) Si c'est un vrai lien de paiement "link_", on mint une copie trackée (metadata → attribution directe).
+    //    Une page de donation "don_lk_" ne supporte pas les copies : on envoie le lien brut et l'attribution
+    //    se fait côté webhook (id Telegram du fan + demande de pourboire en attente).
     let sendUrl = tipLink;
-    try {
-      const { data: { session: sess } } = await supabase.auth.getSession();
-      const r = await fetch("/api/dropp/send-link", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${sess?.access_token}` }, body: JSON.stringify({ modelId, linkUrl: tipLink, metadata: { message_id: data.id, fan_id: fanId, type: "tip" } }) });
-      const out = await r.json();
-      if (out?.ok && out.checkoutUrl) sendUrl = out.checkoutUrl;
-    } catch (e) { /* fallback lien brut */ }
+    if (/link_[A-Za-z0-9_-]+/.test(tipLink) && !/don_/.test(tipLink)) {
+      try {
+        const { data: { session: sess } } = await supabase.auth.getSession();
+        const r = await fetch("/api/dropp/send-link", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${sess?.access_token}` }, body: JSON.stringify({ modelId, linkUrl: tipLink, metadata: { message_id: data.id, fan_id: fanId, type: "tip" } }) });
+        const out = await r.json();
+        if (out?.ok && out.checkoutUrl) sendUrl = out.checkoutUrl;
+      } catch (e) { /* fallback lien brut */ }
+    }
     // 3) envoi réel au fan ; si l'envoi échoue on retire la demande
     let tgId = null;
     if (WORKER && fan?.tgUserId && sendUrl) {
