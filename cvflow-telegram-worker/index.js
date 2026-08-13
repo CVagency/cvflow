@@ -85,23 +85,28 @@ function attachHandlers(modelId, agencyId, client) {
       const tgId = String(sender.id);
       const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.username || ("Fan " + tgId);
 
-      // upsert fan par tg_user_id
-      let { data: fan } = await supa.from("cvflow_fans").select("id, tg_avatar").eq("model_id", modelId).eq("tg_user_id", tgId).maybeSingle();
+      // upsert fan par tg_user_id — select minimal pour ne JAMAIS dépendre d'une colonne optionnelle
+      let { data: fan } = await supa.from("cvflow_fans").select("id").eq("model_id", modelId).eq("tg_user_id", tgId).maybeSingle();
       if (!fan) {
-        const ins = await supa.from("cvflow_fans").insert({ model_id: modelId, agency_id: agencyId, name, source: "tg", tag: "new", tg_user_id: tgId }).select("id, tg_avatar").single();
+        const ins = await supa.from("cvflow_fans").insert({ model_id: modelId, agency_id: agencyId, name, source: "tg", tag: "new", tg_user_id: tgId }).select("id").single();
         fan = ins.data;
       }
-      // Photo de profil Telegram — téléchargée une seule fois par fan (ignorée si privée/absente)
-      if (fan && !fan.tg_avatar) {
-        try {
-          const buf = await client.downloadProfilePhoto(sender, { isBig: false });
-          if (buf && buf.length) await supa.from("cvflow_fans").update({ tg_avatar: "data:image/jpeg;base64," + Buffer.from(buf).toString("base64") }).eq("id", fan.id);
-        } catch (e) { /* pas de photo accessible */ }
-      }
+      if (!fan) return;
+
+      // Chemin critique : on enregistre le message entrant D'ABORD
       await supa.from("cvflow_messages").insert({
         fan_id: fan.id, model_id: modelId, agency_id: agencyId,
         direction: "in", kind: "text", body: msg.message || "", tg_message_id: String(msg.id),
       });
+
+      // Photo de profil Telegram — best-effort : si la colonne tg_avatar n'existe pas ou la photo est privée, on ignore sans casser le message
+      try {
+        const { data: cur } = await supa.from("cvflow_fans").select("tg_avatar").eq("id", fan.id).maybeSingle();
+        if (cur && !cur.tg_avatar) {
+          const buf = await client.downloadProfilePhoto(sender, { isBig: false });
+          if (buf && buf.length) await supa.from("cvflow_fans").update({ tg_avatar: "data:image/jpeg;base64," + Buffer.from(buf).toString("base64") }).eq("id", fan.id);
+        }
+      } catch (e) { /* colonne absente ou photo inaccessible : sans impact sur le message */ }
     } catch (e) { console.error("handler err", e); }
   }, new NewMessage({}));
 }
