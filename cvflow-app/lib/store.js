@@ -149,6 +149,7 @@ export function StoreProvider({ children }) {
   }, []);
   function mapMsg(m) {
     if (m.kind === "ppv") return { t: "ppv", id: m.id, name: m.body, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, tgId: m.tg_message_id, folder: "", lvl: "", type: "photo", time: timeOf(m.created_at), date: m.created_at ? new Date(m.created_at).toLocaleDateString("fr-FR") : "" };
+    if (m.kind === "tip") return { t: "tip", id: m.id, price: Number(m.price), unlocked: m.unlocked, by: m.sender_id, tgId: m.tg_message_id, time: timeOf(m.created_at), date: m.created_at ? new Date(m.created_at).toLocaleDateString("fr-FR") : "" };
     return { t: m.direction === "in" ? "in" : "out", id: m.id, tgId: m.tg_message_id, x: m.body, by: m.sender_id, time: timeOf(m.created_at) };
   }
   const sendMessage = useCallback(async (fanId, text, replyTo) => {
@@ -217,6 +218,51 @@ export function StoreProvider({ children }) {
     return { ok: true, id: data.id };
   }, [vault, profile, convs]);
 
+  // Demande de pourboire : envoie le lien de pourboire (montant libre) du modèle. Le montant EXACT payé
+  // par le fan remontera tout seul via le webhook Dropp (metadata type=tip) et s'affichera dans la bulle.
+  const sendTipRequest = useCallback(async (fanId) => {
+    const fan = convs.find((c) => c.id === fanId);
+    const modelId = fan?.model_id || activeModel;
+    const model = models.find((m) => m.id === modelId);
+    const tipLink = model?.dropp_tip_link;
+    if (!tipLink) return { ok: false, error: "Ajoute d'abord un lien de pourboire dans les réglages Dropp du modèle (Modèles → Dropp)." };
+    // 1) enregistre la demande (kind=tip, montant 0 tant que non payé)
+    const { data } = await supabase.from("cvflow_messages").insert({ fan_id: fanId, model_id: modelId, agency_id: profile.agency_id, sender_id: profile.id, kind: "tip", body: "Pourboire", price: 0, unlocked: false }).select().single();
+    if (!data) return { ok: false, error: "Erreur d'enregistrement" };
+    // 2) copie trackée Dropp (metadata {message_id, fan_id, type:tip}) → paiement remonté par webhook
+    let sendUrl = tipLink;
+    try {
+      const { data: { session: sess } } = await supabase.auth.getSession();
+      const r = await fetch("/api/dropp/send-link", { method: "POST", headers: { "content-type": "application/json", authorization: `Bearer ${sess?.access_token}` }, body: JSON.stringify({ modelId, linkUrl: tipLink, metadata: { message_id: data.id, fan_id: fanId, type: "tip" } }) });
+      const out = await r.json();
+      if (out?.ok && out.checkoutUrl) sendUrl = out.checkoutUrl;
+    } catch (e) { /* fallback lien brut */ }
+    // 3) envoi réel au fan ; si l'envoi échoue on retire la demande
+    let tgId = null;
+    if (WORKER && fan?.tgUserId && sendUrl) {
+      const caption = `💝 Un petit pourboire pour me soutenir ? Tu mets le montant que tu veux 🥰\n👉 ${sendUrl}`;
+      const res = await workerSend(modelId, fan.tgUserId, caption);
+      if (!res.ok) { await supabase.from("cvflow_messages").delete().eq("id", data.id); return { ok: false, error: res.error || "Envoi impossible (modèle déconnecté ou banni)" }; }
+      tgId = res.tgId;
+    }
+    const msg = mapMsg(data); if (tgId) msg.tgId = tgId;
+    setChats((prev) => ({ ...prev, [fanId]: [...(prev[fanId] || []), msg] }));
+    if (tgId) await supabase.from("cvflow_messages").update({ tg_message_id: tgId }).eq("id", data.id);
+    return { ok: true, id: data.id };
+  }, [convs, activeModel, models, profile]);
+
+  // Fallback manuel : marquer un pourboire reçu avec son montant (si le webhook n'a pas remonté)
+  const markTipPaid = useCallback(async (messageId, fanId, amount) => {
+    const amt = Number(amount) || 0;
+    if (!amt) return;
+    const { data: msg } = await supabase.from("cvflow_messages").update({ unlocked: true, price: amt }).eq("id", messageId).select().single();
+    if (!msg) return;
+    await supabase.from("cvflow_sales").insert({ agency_id: profile.agency_id, model_id: msg.model_id, fan_id: fanId, member_id: msg.sender_id, amount: amt });
+    const fan = convs.find((c) => c.id === fanId);
+    if (fan) await supabase.from("cvflow_fans").update({ spent: Number(fan.spent) + amt }).eq("id", fanId);
+    loadChat(fanId); refresh();
+  }, [profile, convs, loadChat, refresh]);
+
   // Marque un PPV payé + crédite le chatteur (déclenché par le webhook Dropp en prod, ou manuellement ici)
   const markPaid = useCallback(async (messageId, fanId) => {
     const { data: msg } = await supabase.from("cvflow_messages").update({ unlocked: true }).eq("id", messageId).select().single();
@@ -264,6 +310,16 @@ export function StoreProvider({ children }) {
   // Clé API Dropp Fans par modèle (drp_live_…) — sert à récupérer prix/visuel + recevoir les paiements en webhook
   const setDroppKey = useCallback(async (modelId, key) => {
     await supabase.from("cvflow_models").update({ dropp_api_key: key || null }).eq("id", modelId);
+    refresh();
+  }, [refresh]);
+
+  // Enregistre en une fois la clé API + le lien de pourboire (montant libre) du modèle
+  const setDroppConfig = useCallback(async (modelId, { key, tipLink }) => {
+    const patch = {};
+    if (key !== undefined) patch.dropp_api_key = key || null;
+    if (tipLink !== undefined) patch.dropp_tip_link = tipLink || null;
+    if (!Object.keys(patch).length) return;
+    await supabase.from("cvflow_models").update(patch).eq("id", modelId);
     refresh();
   }, [refresh]);
 
@@ -359,7 +415,7 @@ export function StoreProvider({ children }) {
     ready, loading, auth, profile, session, currentUser,
     signIn, signUp, logout,
     models, team, vault, scripts, convs, chats, salesLog, shifts, activeModel, setActiveModel,
-    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, markPaid, unmarkPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, setDroppKey, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
+    loadChat, sendMessage, reactMessage, deleteChatMessage, setFanTag, sendVaultItem, sendTipRequest, markTipPaid, markPaid, unmarkPaid, logSale, setPct, addMember, removeMember, setRole, deleteModel, setModelConnected, setDroppKey, setDroppConfig, addMedia, deleteFolder, deleteMedia, addModel, addFolder, addScript, addFan, addShift, removeShift, saveFiche, saveNote, markRead, refresh,
   };
   return <StoreCtx.Provider value={value}>{children}</StoreCtx.Provider>;
 }

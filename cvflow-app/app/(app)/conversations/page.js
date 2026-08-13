@@ -122,7 +122,7 @@ export default function Conversations() {
               </div>
               <div ref={msgsRef} className="flex-1 overflow-y-auto p-[22px] flex flex-col gap-2.5">
                 {msgs.length === 0 && <div className="self-center text-muted2 text-[12.5px] mt-6">Démarre la conversation ci-dessous.</div>}
-                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} onPaid={() => s.markPaid(m.id, conv.id)} onUnpaid={() => s.unmarkPaid(m.id, conv.id)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} onDelete={() => s.deleteChatMessage(conv.id, m.id, m.tgId)} />)}
+                {msgs.map((m, i) => <Bubble key={m.id || i} m={m} team={team} fanName={conv.name} onPaid={() => s.markPaid(m.id, conv.id)} onUnpaid={() => s.unmarkPaid(m.id, conv.id)} onTipPaid={(amt) => s.markTipPaid(m.id, conv.id, amt)} onLike={() => s.reactMessage(conv.id, m.tgId, "❤️")} onReply={() => setReplyTo(m)} onDelete={() => s.deleteChatMessage(conv.id, m.id, m.tgId)} />)}
               </div>
               <div className="border-t border-line px-3.5 py-2.5 bg-bg2 relative">
                 {showScripts && (
@@ -154,6 +154,7 @@ export default function Conversations() {
                 <div className="flex gap-1.5 mb-2 flex-wrap">
                   <button onClick={() => setVaultOpen((v) => !v)} className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-lg bg-panel border border-gold/30 text-gold font-semibold">🗄️ Coffre média</button>
                   <button onClick={() => setShowScripts((v) => !v)} className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-lg bg-panel border border-tg/30 text-tg font-semibold">Scripts ( / )</button>
+                  <button onClick={async () => { setSendErr(""); const r = await s.sendTipRequest(activeConv); if (r && r.ok === false) setSendErr(r.error || "Envoi impossible"); }} className="flex items-center gap-1.5 text-[12px] px-2.5 py-1.5 rounded-lg bg-panel border border-danger/30 text-danger font-semibold" title="Envoyer un lien de pourboire (montant libre)">💝 Demande pourboire</button>
                 </div>
                 <div className="flex gap-2.5 items-end">
                   <textarea value={draft} onChange={(e) => onDraft(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }} rows={1} placeholder={`Écris à ${conv.name}…  (tape / pour tes scripts)`} className="flex-1 inp px-3.5 py-2.5 text-[13.5px] resize-none max-h-[120px]" />
@@ -211,8 +212,37 @@ function Empty({ title, sub }) {
   return <div className="h-full flex flex-col items-center justify-center text-center gap-2 p-8"><div className="text-4xl opacity-40">🗂️</div><div className="font-bold text-lg">{title}</div><div className="text-muted text-sm max-w-sm">{sub}</div></div>;
 }
 
-function Bubble({ m, team, onPaid, onUnpaid, onLike, onReply, onDelete }) {
+function Bubble({ m, team, fanName, onPaid, onUnpaid, onTipPaid, onLike, onReply, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false);
+  if (m.t === "tip") {
+    const by = m.by ? team.find((t) => t.id === m.by) : null;
+    if (m.unlocked) {
+      // Pourboire reçu — bulle rouge mise en avant avec le montant EXACT payé (façon Reveal)
+      return (
+        <div className="self-center max-w-[82%] my-1.5 group">
+          <div className="flex items-center gap-2.5 px-4 py-2.5 rounded-2xl text-white shadow-lg" style={{ background: "linear-gradient(135deg,#f43f5e,#be123c)" }}>
+            <span className="text-lg shrink-0">💝</span>
+            <span className="text-[13.5px] font-semibold">{fanName} a envoyé un pourboire de <b className="font-extrabold">{eur(m.price)}</b></span>
+            <button onClick={onUnpaid} title="Annuler ce pourboire" className="ml-1 shrink-0 text-white/60 hover:text-white text-[13px] opacity-0 group-hover:opacity-100 transition">↩</button>
+          </div>
+          <div className="text-[10px] text-muted2 mt-1 text-center">{m.time}{by ? ` · demandé par ${by.name?.split(" ")[0]}` : ""}</div>
+        </div>
+      );
+    }
+    // Pourboire demandé, en attente du paiement
+    return (
+      <div className="self-end max-w-[62%] flex flex-col items-end group">
+        <div className="flex items-center gap-2 px-3.5 py-2.5 rounded-2xl border border-danger/40" style={{ background: "rgba(244,63,94,.08)" }}>
+          <span>💝</span>
+          <span className="text-[13px] font-bold text-danger">Pourboire demandé</span>
+          <span className="text-[11px] text-muted">· en attente</span>
+          <button onClick={() => { const v = prompt("Montant du pourboire reçu (€) — laisse vide si tu attends encore :"); if (v && Number(v) > 0) onTipPaid && onTipPaid(Number(v)); }} title="Marquer reçu manuellement" className="ml-1 text-[11px] font-bold text-acc/80 hover:text-acc opacity-0 group-hover:opacity-100 transition">✓ reçu</button>
+          <button onClick={() => { if (confirmDel) { onDelete && onDelete(); } else { setConfirmDel(true); setTimeout(() => setConfirmDel(false), 2500); } }} title="Supprimer" className={`text-[11px] font-bold transition ${confirmDel ? "text-danger" : "text-muted2 hover:text-danger opacity-0 group-hover:opacity-100"}`}>{confirmDel ? "Sûr ?" : "🗑"}</button>
+        </div>
+        <div className="text-[10px] opacity-60 mt-1">{m.time}{by ? ` · ${by.name?.split(" ")[0]}` : ""}</div>
+      </div>
+    );
+  }
   if (m.t === "ppv") {
     const by = m.by ? team.find((t) => t.id === m.by) : null;
     return (
@@ -272,6 +302,8 @@ function FanInfo({ conv, chats, store }) {
   const prixMax = prices.length ? Math.max(...prices) : 0;
   const prixMin = prices.length ? Math.min(...prices) : 0;
   const encaisse = bought.reduce((a, p) => a + p.price, 0);
+  const tips = (chats[conv.id] || []).filter((m) => m.t === "tip" && m.unlocked);
+  const tipsTotal = tips.reduce((a, t) => a + Number(t.price || 0), 0);
   const fields = [["age", "Âge"], ["location", "Localisation"], ["job", "Job"], ["relationship", "Situation"], ["interests", "Intérêts"], ["budget", "Budget"], ["timezone", "Fuseau"]];
   return (
     <div className="w-[290px] min-w-[290px] border-l border-line bg-bg2 overflow-y-auto max-[1250px]:hidden">
@@ -295,6 +327,7 @@ function FanInfo({ conv, chats, store }) {
         <div className="flex items-center justify-between text-[11.5px] mb-1"><span className="text-muted">Taux d'achat</span><span className="font-extrabold text-acc">{taux}% <span className="text-muted2 font-normal">({bought.length}/{paid.length})</span></span></div>
         <div className="h-2 rounded-full bg-panel2 overflow-hidden mb-3"><div className="h-full rounded-full transition-all" style={{ width: taux + "%", background: "linear-gradient(90deg,#22c55e,#16a34a)" }} /></div>
         <Row k="Total encaissé" v={eur(encaisse)} acc />
+        {tipsTotal > 0 && <Row k="💝 Pourboires reçus" v={eur(tipsTotal)} acc />}
         <Row k="Total dépensé (fan)" v={eur(conv.spent)} />
       </Section>
       <Section title="🎬 Historique PPV">

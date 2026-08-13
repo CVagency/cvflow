@@ -45,10 +45,11 @@ function PlaceholderQR() {
 }
 
 export default function Models() {
-  const { models, convs, addModel, deleteModel, setActiveModel, setModelConnected, setDroppKey } = useStore();
+  const { models, convs, addModel, deleteModel, setActiveModel, setModelConnected, setDroppConfig } = useStore();
   const router = useRouter();
   const [droppModal, setDroppModal] = useState(null); // modèle en cours d'édition de clé Dropp
   const [droppInput, setDroppInput] = useState("");
+  const [droppTip, setDroppTip] = useState("");
   const [connect, setConnect] = useState(false);
   const [name, setName] = useState("");
   const [step, setStep] = useState("form");
@@ -149,7 +150,7 @@ export default function Models() {
               </div>
               <div className="flex gap-2 mb-3.5">
                 <div className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px]"><span className="w-2 h-2 rounded-full" style={{ background: m.tg ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#3aa0e6" }}>Telegram</span></div>
-                <button onClick={() => { setDroppInput(""); setDroppModal(m); }} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px] hover:border-gold/50" title="Connecter la clé API Dropp Fans"><span className="w-2 h-2 rounded-full" style={{ background: m.dropp ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#e5b769" }}>Dropp {m.dropp ? "✓" : "＋"}</span></button>
+                <button onClick={() => { setDroppInput(m.dropp_api_key || ""); setDroppTip(m.dropp_tip_link || ""); setDroppModal(m); }} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px] hover:border-gold/50" title="Connecter la clé API Dropp Fans"><span className="w-2 h-2 rounded-full" style={{ background: m.dropp ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#e5b769" }}>Dropp {m.dropp ? "✓" : "＋"}</span></button>
               </div>
               {needsReconnect && <button onClick={() => reconnect(m)} className="w-full py-2 text-[12px] font-bold mb-2 rounded-[10px] text-white" style={{ background: "linear-gradient(135deg,#3aa0e6,#2a80c6)" }}>🔗 Reconnecter Telegram (scanner le QR)</button>}
               <div className="flex gap-2">
@@ -216,9 +217,12 @@ export default function Models() {
             </div>
             <label className="text-xs text-muted font-semibold block mb-1.5">Clé API Dropp du modèle {droppModal.name}</label>
             <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppInput} onChange={(e) => setDroppInput(e.target.value)} placeholder="drp_live_…" />
+            <label className="text-xs text-muted font-semibold block mb-1.5">💝 Lien de pourboire <span className="text-muted2 font-normal">(montant libre — facultatif)</span></label>
+            <div className="bg-bg2 border border-line rounded-lg px-3 py-2 mb-2 text-[11.5px] text-muted2 leading-relaxed">Dans Dropp → <b className="text-txt">Liens de paiement</b>, crée un lien <b className="text-txt">« Pourboire »</b> (sans prix fixe / montant libre), copie son URL et colle-la ici. Elle servira au bouton <b className="text-txt">Demande pourboire</b> dans les conversations.</div>
+            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppTip} onChange={(e) => setDroppTip(e.target.value)} placeholder="https://app.dropp.fans/l/link_…" />
             <div className="flex gap-2.5">
               <button onClick={() => setDroppModal(null)} className="btn-ghost flex-1 py-2.5 font-semibold">Annuler</button>
-              <button onClick={async () => { const id = droppModal.id; setDroppModal(null); await setDroppKey(id, droppInput.trim()); }} className="btn flex-1 py-2.5 font-bold">Enregistrer la clé</button>
+              <button onClick={async () => { const id = droppModal.id; setDroppModal(null); await setDroppConfig(id, { key: droppInput.trim(), tipLink: droppTip.trim() }); }} className="btn flex-1 py-2.5 font-bold">Enregistrer</button>
             </div>
           </div>
         </div>

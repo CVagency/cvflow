@@ -36,8 +36,14 @@ export async function POST(req) {
   if (!msg) return json({ ok: true, msg_not_found: true });
   if (msg.unlocked) return json({ ok: true, already: true });        // idempotence (livraison at-least-once)
 
-  const amount = Number(msg.price) || Math.round((payload?.data?.amount?.total_cents || 0) / 100);
-  await admin.from("cvflow_messages").update({ unlocked: true }).eq("id", messageId);
+  // Montant exact payé (en centimes) remonté par Dropp — plusieurs formes possibles selon l'événement
+  const d = payload?.data || {};
+  const cents = d?.amount?.total_cents ?? d?.amount_total_cents ?? d?.total_cents ?? d?.amount_cents ?? (typeof d?.amount === "number" ? d.amount : 0) ?? 0;
+  const paid = Math.round(Number(cents || 0) / 100);
+  const isTip = msg.kind === "tip";
+  // PPV = prix fixe du média ; pourboire = montant libre choisi par le fan
+  const amount = isTip ? paid : (Number(msg.price) || paid);
+  await admin.from("cvflow_messages").update(isTip ? { unlocked: true, price: amount } : { unlocked: true }).eq("id", messageId);
   await admin.from("cvflow_sales").insert({ agency_id: msg.agency_id, model_id: msg.model_id, fan_id: msg.fan_id, member_id: msg.sender_id, amount });
   const { data: fan } = await admin.from("cvflow_fans").select("spent").eq("id", msg.fan_id).maybeSingle();
   if (fan) await admin.from("cvflow_fans").update({ spent: Number(fan.spent || 0) + Number(amount) }).eq("id", msg.fan_id);
