@@ -5,25 +5,39 @@ import crypto from "crypto";
 //  - PPV / lien tracké  : via metadata.message_id (échangé par la copie trackée du lien).
 //  - Pourboire (donation): montant libre → PAS de métadonnées possibles. On retrouve le fan par son
 //    id Telegram (buyer.telegram.id) et on rattache la demande de pourboire "en attente" la plus récente.
-// On apprend au passage le mapping modèle ↔ créateur Dropp (seller.id) pour scoper proprement par modèle.
+// Multi-agences : DROPP_WEBHOOK_SECRET peut lister plusieurs secrets (séparés par virgule/espace),
+// un par agence — la signature est valide si l'un d'eux correspond.
+// Idempotence : chaque commande Dropp (order id) n'est traitée qu'une fois (livraison at-least-once + rejeu).
 export const dynamic = "force-dynamic";
 
 export async function POST(req) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const service = process.env.SUPABASE_SERVICE_ROLE_KEY;
-  const secret = process.env.DROPP_WEBHOOK_SECRET;
 
   const raw = await req.text();
   const sig = req.headers.get("x-dropp-signature") || "";
   const ts = req.headers.get("x-dropp-timestamp") || "";
+  const admin = createClient(url, service, { auth: { persistSession: false } });
 
-  // Vérification de signature (obligatoire si le secret est configuré)
-  if (secret) {
+  // Vérification de signature. Chaque agence enregistre le secret de son webhook dans le CRM
+  // (colonne cvflow_models.dropp_webhook_secret) ; DROPP_WEBHOOK_SECRET (env) reste accepté en plus.
+  // La signature est valide si l'un des secrets connus correspond → self-service, sans redéploiement.
+  const verify = (sec) => {
+    const expected = "sha256=" + crypto.createHmac("sha256", sec).update(`${ts}.${raw}`).digest("hex");
+    try { return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)); } catch (e) { return false; }
+  };
+  const envSecrets = (process.env.DROPP_WEBHOOK_SECRET || "").split(/[,\s]+/).map((x) => x.trim()).filter(Boolean);
+  let enforced = envSecrets.length > 0;
+  let sigOk = envSecrets.some(verify);
+  if (!sigOk) {
+    const { data: rows } = await admin.from("cvflow_models").select("dropp_webhook_secret").not("dropp_webhook_secret", "is", null);
+    const dbSecrets = [...new Set((rows || []).map((r) => r.dropp_webhook_secret).filter(Boolean))];
+    if (dbSecrets.length) enforced = true;
+    sigOk = dbSecrets.some(verify);
+  }
+  if (enforced) {
     if (Math.floor(Date.now() / 1000) - parseInt(ts || "0", 10) > 300) return json({ error: "stale" }, 400);
-    const expected = "sha256=" + crypto.createHmac("sha256", secret).update(`${ts}.${raw}`).digest("hex");
-    let ok = false;
-    try { ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)); } catch (e) { ok = false; }
-    if (!ok) return json({ error: "bad_signature" }, 401);
+    if (!sigOk) return json({ error: "bad_signature" }, 401);
   }
 
   let payload; try { payload = JSON.parse(raw); } catch { return json({ error: "bad_json" }, 400); }
@@ -31,10 +45,16 @@ export async function POST(req) {
   if (payload?.event !== "order.paid") return json({ ok: true, ignored: payload?.event || null });
 
   const d = payload?.data || {};
+  const orderId = d?.id || null;
   const cents = d?.amount?.total_cents ?? d?.amount?.subtotal_cents ?? d?.amount_cents ?? (typeof d?.amount === "number" ? d.amount : 0) ?? 0;
   const paid = Math.round(Number(cents || 0) / 100);
   const sellerProf = d?.seller?.id || null;                          // id du créateur Dropp (prof_…)
-  const admin = createClient(url, service, { auth: { persistSession: false } });
+
+  // Idempotence globale : si cette commande Dropp a déjà été enregistrée, on ne refait rien (rejeu/retry)
+  if (orderId) {
+    const { data: dup } = await admin.from("cvflow_messages").select("id").eq("dropp_order_id", orderId).limit(1).maybeSingle();
+    if (dup) return json({ ok: true, already_order: orderId });
+  }
 
   // Apprend le mapping modèle ↔ créateur Dropp (une seule fois, si pas encore connu)
   const learnModel = async (modelId) => {
@@ -50,7 +70,7 @@ export async function POST(req) {
     const isTip = msg.kind === "tip";
     const amount = isTip ? paid : (Number(msg.price) || paid);
     if (isTip && amount <= 0) return json({ ok: true, tip_zero: true });
-    await admin.from("cvflow_messages").update(isTip ? { unlocked: true, price: amount } : { unlocked: true }).eq("id", messageId);
+    await admin.from("cvflow_messages").update(isTip ? { unlocked: true, price: amount, dropp_order_id: orderId } : { unlocked: true, dropp_order_id: orderId }).eq("id", messageId);
     await admin.from("cvflow_sales").insert({ agency_id: msg.agency_id, model_id: msg.model_id, fan_id: msg.fan_id, member_id: msg.sender_id, amount });
     const { data: fan } = await admin.from("cvflow_fans").select("spent").eq("id", msg.fan_id).maybeSingle();
     if (fan) await admin.from("cvflow_fans").update({ spent: Number(fan.spent || 0) + Number(amount) }).eq("id", msg.fan_id);
@@ -92,7 +112,7 @@ export async function POST(req) {
   }
 
   if (tip) {
-    await admin.from("cvflow_messages").update({ unlocked: true, price: paid }).eq("id", tip.id);
+    await admin.from("cvflow_messages").update({ unlocked: true, price: paid, dropp_order_id: orderId }).eq("id", tip.id);
     await admin.from("cvflow_sales").insert({ agency_id: tip.agency_id, model_id: tip.model_id, fan_id: tip.fan_id, member_id: tip.sender_id, amount: paid });
     const { data: fan } = await admin.from("cvflow_fans").select("spent").eq("id", tip.fan_id).maybeSingle();
     if (fan) await admin.from("cvflow_fans").update({ spent: Number(fan.spent || 0) + paid }).eq("id", tip.fan_id);
@@ -105,7 +125,7 @@ export async function POST(req) {
   if (fanRow) {
     const { data: lastOut } = await admin.from("cvflow_messages").select("sender_id").eq("fan_id", fanRow.id).eq("direction", "out").not("sender_id", "is", null).order("created_at", { ascending: false }).limit(1).maybeSingle();
     const member = lastOut?.sender_id || null;
-    const { data: m } = await admin.from("cvflow_messages").insert({ fan_id: fanRow.id, model_id: fanRow.model_id, agency_id: fanRow.agency_id, sender_id: member, kind: "tip", body: "Pourboire", price: paid, unlocked: true }).select().single();
+    const { data: m } = await admin.from("cvflow_messages").insert({ fan_id: fanRow.id, model_id: fanRow.model_id, agency_id: fanRow.agency_id, sender_id: member, kind: "tip", body: "Pourboire", price: paid, unlocked: true, dropp_order_id: orderId }).select().single();
     if (m) {
       if (member) await admin.from("cvflow_sales").insert({ agency_id: fanRow.agency_id, model_id: fanRow.model_id, fan_id: fanRow.id, member_id: member, amount: paid });
       await admin.from("cvflow_fans").update({ spent: Number(fanRow.spent || 0) + paid }).eq("id", fanRow.id);

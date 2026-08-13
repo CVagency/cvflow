@@ -80,10 +80,10 @@ export function StoreProvider({ children }) {
   // ---- Load everything for the agency ----
   const loadAll = useCallback(async (agencyId) => {
     const [mRes, pRes] = await Promise.all([
-      supabase.from("cvflow_models").select("*").eq("agency_id", agencyId).order("created_at"),
+      supabase.from("cvflow_models").select("id, agency_id, name, tg_connected, created_at, dropp_tip_link, dropp_has_key, dropp_has_secret").eq("agency_id", agencyId).order("created_at"),
       supabase.from("cvflow_profiles").select("*").eq("agency_id", agencyId),
     ]);
-    const ms = (mRes.data || []).map((m) => ({ ...m, color: colorFor(m.name), c2: "#0d9488", tg: m.tg_connected, dropp: !!m.dropp_api_key, fans: 0, ca30: 0, ppv: 0, conv: 0 }));
+    const ms = (mRes.data || []).map((m) => ({ ...m, color: colorFor(m.name), c2: "#0d9488", tg: m.tg_connected, dropp: !!m.dropp_has_key, dropphook: !!m.dropp_has_secret, fans: 0, ca30: 0, ppv: 0, conv: 0 }));
     setModels(ms);
     setTeam((pRes.data || []).map((p) => ({ id: p.id, name: p.name || p.email, email: p.email, role: p.role, pct: p.pct, models: ms.map((m) => m.id), msgs: 0, sales: 0, ca: 0, hours: 0, rt: "—", online: false, color: colorFor(p.name || p.email) })));
     if (ms.length && !activeModel) setActiveModel(ms[0].id);
@@ -319,11 +319,14 @@ export function StoreProvider({ children }) {
     refresh();
   }, [refresh]);
 
-  // Enregistre en une fois la clé API + le lien de pourboire (montant libre) du modèle
-  const setDroppConfig = useCallback(async (modelId, { key, tipLink }) => {
+  // Enregistre la config Dropp du modèle : clé API + secret du webhook + lien de pourboire.
+  // Les secrets ne sont jamais renvoyés au navigateur : un champ laissé vide = on garde l'existant
+  // (les booléens dropp_has_key / dropp_has_secret servent juste à afficher l'état "configuré ✓").
+  const setDroppConfig = useCallback(async (modelId, { key, tipLink, secret }) => {
     const patch = {};
-    if (key !== undefined) patch.dropp_api_key = key || null;
-    if (tipLink !== undefined) patch.dropp_tip_link = tipLink || null;
+    if (key) { patch.dropp_api_key = key; patch.dropp_has_key = true; }
+    if (secret) { patch.dropp_webhook_secret = secret; patch.dropp_has_secret = true; }
+    if (tipLink !== undefined) patch.dropp_tip_link = tipLink || null;   // le lien de pourboire peut être vidé
     if (!Object.keys(patch).length) return;
     await supabase.from("cvflow_models").update(patch).eq("id", modelId);
     refresh();

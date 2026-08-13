@@ -50,6 +50,7 @@ export default function Models() {
   const [droppModal, setDroppModal] = useState(null); // modèle en cours d'édition de clé Dropp
   const [droppInput, setDroppInput] = useState("");
   const [droppTip, setDroppTip] = useState("");
+  const [droppSecret, setDroppSecret] = useState("");
   const [connect, setConnect] = useState(false);
   const [name, setName] = useState("");
   const [step, setStep] = useState("form");
@@ -150,7 +151,7 @@ export default function Models() {
               </div>
               <div className="flex gap-2 mb-3.5">
                 <div className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px]"><span className="w-2 h-2 rounded-full" style={{ background: m.tg ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#3aa0e6" }}>Telegram</span></div>
-                <button onClick={() => { setDroppInput(m.dropp_api_key || ""); setDroppTip(m.dropp_tip_link || ""); setDroppModal(m); }} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px] hover:border-gold/50" title="Connecter la clé API Dropp Fans"><span className="w-2 h-2 rounded-full" style={{ background: m.dropp ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#e5b769" }}>Dropp {m.dropp ? "✓" : "＋"}</span></button>
+                <button onClick={() => { setDroppInput(""); setDroppSecret(""); setDroppTip(m.dropp_tip_link || ""); setDroppModal(m); }} className="flex-1 flex items-center gap-1.5 bg-bg2 border border-line rounded-lg px-2 py-2 text-[11.5px] hover:border-gold/50" title="Connecter la clé API Dropp Fans"><span className="w-2 h-2 rounded-full" style={{ background: m.dropp ? "#22c55e" : "#5f6b66" }} /><span style={{ color: "#e5b769" }}>Dropp {m.dropp ? "✓" : "＋"}</span></button>
               </div>
               {needsReconnect && <button onClick={() => reconnect(m)} className="w-full py-2 text-[12px] font-bold mb-2 rounded-[10px] text-white" style={{ background: "linear-gradient(135deg,#3aa0e6,#2a80c6)" }}>🔗 Reconnecter Telegram (scanner le QR)</button>}
               <div className="flex gap-2">
@@ -203,26 +204,30 @@ export default function Models() {
 
       {droppModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={(e) => { if (e.target === e.currentTarget) setDroppModal(null); }}>
-          <div className="card p-6 w-[500px] max-w-[92vw]">
+          <div className="card p-6 w-[540px] max-w-[92vw] max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-3"><h2 className="text-lg font-extrabold">🟡 Connecter Dropp Fans · {droppModal.name}</h2><button onClick={() => setDroppModal(null)} className="w-[30px] h-[30px] rounded-lg bg-panel2 text-muted">✕</button></div>
-            <div className="bg-bg2 border border-line rounded-xl p-3.5 mb-4 text-[12.5px] text-muted leading-relaxed">
-              <div className="font-semibold text-txt mb-1.5">Où trouver ta clé API Dropp :</div>
-              <ol className="list-decimal ml-4 flex flex-col gap-1">
-                <li>Connecte-toi sur <span className="text-gold">app.dropp.fans</span></li>
-                <li>Clique sur les <b className="text-txt">⋯ (3 points)</b> à côté du nom de ton agence → <b className="text-txt">Paramètres</b></li>
-                <li>Onglet <b className="text-txt">API</b> → bouton <b className="text-txt">Create Key</b></li>
-                <li>Coche les accès <span className="text-txt">content:read, orders:read, links:read, webhooks:read</span> puis crée la clé</li>
-                <li>Copie la clé <span className="font-mono text-gold">drp_live_…</span> et colle-la ci-dessous</li>
-              </ol>
+            <div className="bg-bg2 border border-line rounded-xl p-3.5 mb-4 text-[12px] text-muted leading-relaxed">
+              Connecte-toi sur <span className="text-gold">app.dropp.fans</span> → clique les <b className="text-txt">⋯</b> à côté de ton agence → <b className="text-txt">Paramètres → onglet API</b>. Tu y crées les deux éléments ci-dessous. Tout se colle ici, rien à faire ailleurs.
             </div>
-            <label className="text-xs text-muted font-semibold block mb-1.5">Clé API Dropp du modèle {droppModal.name}</label>
-            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppInput} onChange={(e) => setDroppInput(e.target.value)} placeholder="drp_live_…" />
-            <label className="text-xs text-muted font-semibold block mb-1.5">💝 Lien de pourboire <span className="text-muted2 font-normal">(montant libre — facultatif)</span></label>
-            <div className="bg-bg2 border border-line rounded-lg px-3 py-2 mb-2 text-[11.5px] text-muted2 leading-relaxed">Dans Dropp → <b className="text-txt">Liens de paiement</b>, crée un lien <b className="text-txt">« Pourboire »</b> (sans prix fixe / montant libre), copie son URL et colle-la ici. Elle servira au bouton <b className="text-txt">Demande pourboire</b> dans les conversations.</div>
-            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppTip} onChange={(e) => setDroppTip(e.target.value)} placeholder="https://app.dropp.fans/l/link_…" />
+
+            {/* 1) Clé API */}
+            <label className="text-xs text-muted font-semibold block mb-1.5">1) Clé API {droppModal.dropp && <span className="text-acc font-bold">· déjà configurée ✓</span>}</label>
+            <div className="bg-bg2 border border-line rounded-lg px-3 py-2 mb-2 text-[11.5px] text-muted2 leading-relaxed"><b className="text-txt">Create Key</b> → coche <span className="text-txt">content:read, orders:read, links:read, links:write, webhooks:read</span> → copie la clé <span className="font-mono text-gold">drp_live_…</span></div>
+            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppInput} onChange={(e) => setDroppInput(e.target.value)} placeholder={droppModal.dropp ? "•••••••••  (laisse vide pour garder l'actuelle)" : "drp_live_…"} />
+
+            {/* 2) Secret du webhook */}
+            <label className="text-xs text-muted font-semibold block mb-1.5">2) Secret du webhook {droppModal.dropphook && <span className="text-acc font-bold">· déjà configuré ✓</span>}</label>
+            <div className="bg-bg2 border border-line rounded-lg px-3 py-2 mb-2 text-[11.5px] text-muted2 leading-relaxed">Même onglet API → <b className="text-txt">Webhook Endpoints → Add Endpoint</b>. URL à coller : <span className="font-mono text-gold break-all">https://cvflow-zeta.vercel.app/api/dropp/webhook</span>. Coche l'événement <b className="text-txt">order.paid</b>, crée-le, puis copie le <b className="text-txt">Signing secret</b> (affiché une seule fois) et colle-le ici. C'est ce qui fait remonter les paiements automatiquement.</div>
+            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppSecret} onChange={(e) => setDroppSecret(e.target.value)} placeholder={droppModal.dropphook ? "•••••••••  (laisse vide pour garder l'actuel)" : "whsec_…"} />
+
+            {/* 3) Lien de pourboire */}
+            <label className="text-xs text-muted font-semibold block mb-1.5">3) 💝 Lien de pourboire <span className="text-muted2 font-normal">(montant libre — facultatif)</span></label>
+            <div className="bg-bg2 border border-line rounded-lg px-3 py-2 mb-2 text-[11.5px] text-muted2 leading-relaxed">Dropp → <b className="text-txt">Liens de paiement</b> → crée un lien <b className="text-txt">« Pourboire »</b> (sans prix fixe), copie son URL. Elle sert au bouton <b className="text-txt">Demande pourboire</b> des conversations.</div>
+            <input className="inp w-full px-3 py-2.5 mb-4 font-mono text-[12px]" value={droppTip} onChange={(e) => setDroppTip(e.target.value)} placeholder="https://app.dropp.fans/external/donation/don_…" />
+
             <div className="flex gap-2.5">
               <button onClick={() => setDroppModal(null)} className="btn-ghost flex-1 py-2.5 font-semibold">Annuler</button>
-              <button onClick={async () => { const id = droppModal.id; setDroppModal(null); await setDroppConfig(id, { key: droppInput.trim(), tipLink: droppTip.trim() }); }} className="btn flex-1 py-2.5 font-bold">Enregistrer</button>
+              <button onClick={async () => { const id = droppModal.id; setDroppModal(null); await setDroppConfig(id, { key: droppInput.trim() || undefined, secret: droppSecret.trim() || undefined, tipLink: droppTip.trim() }); }} className="btn flex-1 py-2.5 font-bold">Enregistrer</button>
             </div>
           </div>
         </div>
