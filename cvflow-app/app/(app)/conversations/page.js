@@ -7,6 +7,14 @@ import CopyLink from "@/components/CopyLink";
 
 function spentColor(n) { n = Number(n) || 0; if (n >= 100) return "#22c55e"; if (n > 0) return "#e5b769"; return "#5f6b66"; }
 
+// Photo de profil Telegram si dispo, sinon initiales colorées
+function Avatar({ c, size = 42 }) {
+  const style = { width: size, height: size };
+  return c.avatar
+    ? <img src={c.avatar} alt="" className="rounded-full object-cover shrink-0" style={style} />
+    : <div className="rounded-full flex items-center justify-center font-bold text-white shrink-0" style={{ ...style, background: c.color, fontSize: Math.round(size * 0.34) }}>{initials(c.name)}</div>;
+}
+
 export default function Conversations() {
   const s = useStore();
   const { models, convs, chats, scripts, team, currentUser, activeModel } = s;
@@ -30,7 +38,8 @@ export default function Conversations() {
     if (filter === "unread") return c.unread > 0;
     if (["vip", "whale", "new", "cold"].includes(filter)) return c.tag === filter;
     return true;
-  }).filter((c) => c.name.toLowerCase().includes(search.toLowerCase()));
+  }).filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (a.lastTs || Infinity) - (b.lastTs || Infinity)); // du plus ancien (à traiter) au plus récent
 
   const conv = convs.find((c) => c.id === activeConv);
   const msgs = activeConv ? chats[activeConv] || [] : [];
@@ -87,12 +96,12 @@ export default function Conversations() {
             {list.map((c) => (
               <div key={c.id} onClick={() => openConv(c.id)} className={`flex gap-2.5 px-3.5 py-3 border-b border-line cursor-pointer relative ${activeConv === c.id ? "bg-panel2 shadow-[inset_2px_0_0_#22c55e]" : "hover:bg-panel"}`}>
                 <div className="relative">
-                  <div className="w-[42px] h-[42px] rounded-full flex items-center justify-center font-bold text-white" style={{ background: c.color }}>{initials(c.name)}</div>
+                  <Avatar c={c} size={42} />
                   <div className="absolute -bottom-0.5 -right-0.5 w-[15px] h-[15px] rounded-full border-2 border-bg2 flex items-center justify-center text-[8px]" style={{ background: "#3aa0e6" }}>✈️</div>
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-center gap-2"><span className={`text-[13.5px] truncate ${c.unread > 0 ? "font-extrabold text-txt" : "font-semibold"}`}>{c.name}</span><span className="text-[12.5px] font-extrabold shrink-0" style={{ color: spentColor(c.spent) }}>{eur(c.spent)}</span></div>
-                  <div className="mt-1 flex items-center gap-1.5"><span className={`badge ${TAG_CLASS[c.tag]}`}>{(TAG_LABEL[c.tag] || c.tag).toUpperCase()}</span>{c.unread > 0 && <span className="badge bg-acc text-[#05130c] font-extrabold px-1.5 min-w-[18px] text-center">{c.unread}</span>}</div>
+                  <div className="flex justify-between items-center gap-2"><span className={`text-[13.5px] truncate ${c.unread > 0 ? "font-extrabold text-txt" : "font-semibold"}`}>{c.name}</span>{c.time && <span className="text-[11px] text-muted2 shrink-0">{c.time}</span>}</div>
+                  <div className="mt-1 flex items-center gap-1.5"><span className={`badge ${TAG_CLASS[c.tag]}`}>{(TAG_LABEL[c.tag] || c.tag).toUpperCase()}</span>{c.unread > 0 && <span className="badge bg-acc text-[#05130c] font-extrabold px-1.5 min-w-[18px] text-center">{c.unread}</span>}<span className="ml-auto text-[12px] font-extrabold shrink-0" style={{ color: spentColor(c.spent) }}>{eur(c.spent)}</span></div>
                 </div>
               </div>
             ))}
@@ -105,7 +114,7 @@ export default function Conversations() {
           ) : (
             <>
               <div className="h-16 min-h-16 border-b border-line flex items-center px-[18px] gap-3">
-                <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white" style={{ background: conv.color }}>{initials(conv.name)}</div>
+                <Avatar c={conv} size={40} />
                 <div className="flex-1 min-w-0">
                   <div className="font-bold text-[15px] flex items-center gap-2">{conv.name} <span className={`badge ${TAG_CLASS[conv.tag]}`}>{conv.tag.toUpperCase()}</span></div>
                   <div className="text-[12px] text-muted"><span style={{ color: "#3aa0e6" }}>✈️ Telegram</span> · via {models.find((m) => m.id === conv.model_id)?.name} · toi = <b className="text-txt">{team.find((t) => t.id === currentUser)?.name?.split(" ")[0] || "moi"}</b></div>
@@ -267,7 +276,7 @@ function FanInfo({ conv, chats, store }) {
   return (
     <div className="w-[290px] min-w-[290px] border-l border-line bg-bg2 overflow-y-auto max-[1250px]:hidden">
       <div className="text-center p-5 border-b border-line">
-        <div className="w-[60px] h-[60px] rounded-full flex items-center justify-center text-2xl font-bold text-white mx-auto mb-2.5" style={{ background: conv.color }}>{initials(conv.name)}</div>
+        <div className="flex justify-center mb-2.5"><Avatar c={conv} size={60} /></div>
         <div className="font-bold text-base">{conv.name}</div>
         <div className="text-[12px] text-muted mt-0.5">✈️ Telegram</div>
         <div className="mt-3"><span className="text-[10px] text-muted2 uppercase tracking-wide block mb-1.5">Catégorie</span>

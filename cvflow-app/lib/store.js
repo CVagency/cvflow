@@ -37,6 +37,8 @@ export const ROLE_VIEWS = {
 const COLORS = ["#e11d48", "#7c3aed", "#0891b2", "#16a34a", "#db2777", "#ea580c", "#4f46e5", "#dc2626", "#d97706", "#0d9488"];
 const colorFor = (s) => COLORS[Math.abs([...(s || "x")].reduce((a, c) => a + c.charCodeAt(0), 0)) % COLORS.length];
 const timeOf = (ts) => { const d = ts ? new Date(ts) : new Date(); return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); };
+// Étiquette du dernier message dans la liste : "HH:MM" si aujourd'hui, sinon "JJ/MM"
+const lastLabel = (ts) => { if (!ts) return ""; const d = new Date(ts), n = new Date(); const sameDay = d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate(); return sameDay ? timeOf(ts) : String(d.getDate()).padStart(2, "0") + "/" + String(d.getMonth() + 1).padStart(2, "0"); };
 
 export function StoreProvider({ children }) {
   const [ready] = useState(supabaseReady);
@@ -96,13 +98,17 @@ export function StoreProvider({ children }) {
         supabase.from("cvflow_scripts").select("*").in("model_id", modelIds),
         supabase.from("cvflow_fans").select("*").eq("agency_id", agencyId).order("created_at", { ascending: false }),
         supabase.from("cvflow_sales").select("*").eq("agency_id", agencyId),
-        supabase.from("cvflow_messages").select("fan_id, created_at").eq("agency_id", agencyId).eq("direction", "in"),
+        supabase.from("cvflow_messages").select("fan_id, created_at, direction").eq("agency_id", agencyId),
       ]);
-      // Messages non lus : on compare la date du dernier message entrant avec la dernière lecture (stockée localement)
+      // Non lus (messages entrants après la dernière lecture locale) + heure du dernier message par fan
       let lastRead = {};
       try { lastRead = JSON.parse((typeof window !== "undefined" && localStorage.getItem("cvflow_lastRead")) || "{}"); } catch (e) { lastRead = {}; }
-      const unreadByFan = {};
-      (inRes.data || []).forEach((m) => { const t = new Date(m.created_at).getTime(); if (t > (lastRead[m.fan_id] || 0)) unreadByFan[m.fan_id] = (unreadByFan[m.fan_id] || 0) + 1; });
+      const unreadByFan = {}, lastTsByFan = {};
+      (inRes.data || []).forEach((m) => {
+        const t = new Date(m.created_at).getTime();
+        if (t > (lastTsByFan[m.fan_id] || 0)) lastTsByFan[m.fan_id] = t;
+        if (m.direction === "in" && t > (lastRead[m.fan_id] || 0)) unreadByFan[m.fan_id] = (unreadByFan[m.fan_id] || 0) + 1;
+      });
       const vaultByModel = {};
       (foldersRes.data || []).forEach((f) => {
         (vaultByModel[f.model_id] = vaultByModel[f.model_id] || []).push({
@@ -114,7 +120,7 @@ export function StoreProvider({ children }) {
       const sc = {};
       (scriptsRes.data || []).forEach((s) => { (sc[s.model_id] = sc[s.model_id] || []).push([s.command, s.title, s.body]); });
       setScripts(sc);
-      setConvs((fansRes.data || []).map((f) => ({ id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: "", unread: unreadByFan[f.id] || 0, tag: f.tag, spent: Number(f.spent), src: f.source, tgUserId: f.tg_user_id, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" })));
+      setConvs((fansRes.data || []).map((f) => { const ts = lastTsByFan[f.id] || 0; return { id: f.id, model_id: f.model_id, name: f.name || "Fan", last: "", time: lastLabel(ts), lastTs: ts, unread: unreadByFan[f.id] || 0, tag: f.tag, spent: Number(f.spent), src: f.source, tgUserId: f.tg_user_id, avatar: f.tg_avatar || null, color: colorFor(f.name || f.id), fiche: f.fiche || {}, notes: f.notes || "" }; }));
       setSalesLog((salesRes.data || []).map((s) => ({ user: s.member_id, model: s.model_id, price: Number(s.amount), date: s.created_at })));
       // reflect sales into team ca
       setTeam((prev) => prev.map((u) => { const ca = (salesRes.data || []).filter((s) => s.member_id === u.id).reduce((a, s) => a + Number(s.amount), 0); return { ...u, ca, sales: (salesRes.data || []).filter((s) => s.member_id === u.id).length }; }));

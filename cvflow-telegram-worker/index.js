@@ -86,10 +86,17 @@ function attachHandlers(modelId, agencyId, client) {
       const name = [sender.firstName, sender.lastName].filter(Boolean).join(" ") || sender.username || ("Fan " + tgId);
 
       // upsert fan par tg_user_id
-      let { data: fan } = await supa.from("cvflow_fans").select("id").eq("model_id", modelId).eq("tg_user_id", tgId).maybeSingle();
+      let { data: fan } = await supa.from("cvflow_fans").select("id, tg_avatar").eq("model_id", modelId).eq("tg_user_id", tgId).maybeSingle();
       if (!fan) {
-        const ins = await supa.from("cvflow_fans").insert({ model_id: modelId, agency_id: agencyId, name, source: "tg", tag: "new", tg_user_id: tgId }).select("id").single();
+        const ins = await supa.from("cvflow_fans").insert({ model_id: modelId, agency_id: agencyId, name, source: "tg", tag: "new", tg_user_id: tgId }).select("id, tg_avatar").single();
         fan = ins.data;
+      }
+      // Photo de profil Telegram — téléchargée une seule fois par fan (ignorée si privée/absente)
+      if (fan && !fan.tg_avatar) {
+        try {
+          const buf = await client.downloadProfilePhoto(sender, { isBig: false });
+          if (buf && buf.length) await supa.from("cvflow_fans").update({ tg_avatar: "data:image/jpeg;base64," + Buffer.from(buf).toString("base64") }).eq("id", fan.id);
+        } catch (e) { /* pas de photo accessible */ }
       }
       await supa.from("cvflow_messages").insert({
         fan_id: fan.id, model_id: modelId, agency_id: agencyId,
