@@ -39,7 +39,7 @@ export default function Conversations() {
     if (["vip", "whale", "new", "cold"].includes(filter)) return c.tag === filter;
     return true;
   }).filter((c) => c.name.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => (a.lastTs || Infinity) - (b.lastTs || Infinity)); // du plus ancien (à traiter) au plus récent
+    .sort((a, b) => (b.lastTs || 0) - (a.lastTs || 0)); // le plus récent en haut (remonte quand on parle au fan)
 
   const conv = convs.find((c) => c.id === activeConv);
   const msgs = activeConv ? chats[activeConv] || [] : [];
